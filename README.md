@@ -2,7 +2,7 @@
 
 # minute
 
-Local meeting notes for Windows. `minute` listens to your calls — Meet, Zoom, Teams, anything — by capturing system audio (them) and your microphone (you), transcribes both live on your machine, and saves a transcript.
+Local meeting notes for Windows. `minute` listens to your calls (Meet, Zoom, Teams, anything) by capturing system audio (them) and your microphone (you), transcribes both live on your machine, and saves a transcript.
 
 No bot joins the call, and no audio leaves your PC.
 
@@ -24,8 +24,14 @@ The model is the GGUF that [Handy](https://handy.computer) downloads (`handy-com
 ## Run
 
 ```powershell
-uv run python -m minute              # until Ctrl+C
-uv run python -m minute --seconds 60
+uv run python -m minute                       # desktop app
+uv run python -m minute record --seconds 60   # terminal only, Ctrl+C to stop
 ```
+
+**The app.** Hit **New note** when your call starts. You get a page to write your own notes while minute transcribes in the background; the live transcript sits behind the **Transcript** pill at the bottom. A small pill docks to the right edge of the screen while recording: green bars mean it hears audio, hover it to stop, click it to open minute. Closing the window keeps minute in the tray.
+
+Each call is saved to `recordings/<timestamp>/`: `notes.md`, `transcript.md`, `blocks.json`, `meta.json`, `you.wav`, `them.wav`. Set `MINUTE_RECORDINGS` to save somewhere else (an Obsidian vault, for example).
+
+**Options:** `--lang it-IT` (default) or any model language code, `--lang auto` to autodetect; `--model` / `MINUTE_MODEL`; `--engine-dir` / `MINUTE_ENGINE_DIR`.
 
 Use headphones: with speakers, the mic also picks up the other people.
