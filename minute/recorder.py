@@ -14,7 +14,7 @@ from datetime import datetime
 import numpy as np
 import pyaudiowpatch as pyaudio
 
-from minute import storage
+from minute import config, settings, storage
 from minute.capture import TARGET_RATE, Source, default_devices
 from minute.engine import Engine
 
@@ -63,8 +63,14 @@ class Track:
         return delta, tentative
 
 
+class ModelMissing(RuntimeError):
+    pass
+
+
 class Recorder:
-    def __init__(self, engine_dir, model_path, language, on_event):
+    """model_path / language override the settings when given (None = use settings)."""
+
+    def __init__(self, engine_dir, on_event, model_path=None, language=None):
         self.engine_dir = engine_dir
         self.model_path = model_path
         self.language = language
@@ -109,6 +115,8 @@ class Recorder:
     def _run(self, seconds):
         try:
             self._record(seconds)
+        except ModelMissing:
+            self.on_event({"type": "model_missing"})
         except Exception as e:  # surface failures to the UI instead of dying silently
             self.on_event({"type": "error", "message": str(e)})
         finally:
@@ -116,14 +124,20 @@ class Recorder:
 
     def _record(self, seconds):
         self._set_state("loading")
+        prefs = settings.load()
+        language = self.language if self.language is not None else prefs["language"]
+        language = None if language == "auto" else language
         if self._engine is None:
-            self._engine = Engine(self.engine_dir, self.model_path)
+            model = self.model_path or config.find_model()
+            if model is None:
+                raise ModelMissing("speech model not found")
+            self._engine = Engine(self.engine_dir, str(model))
 
         pa = pyaudio.PyAudio()
         loopback, mic = default_devices(pa)
         tracks = [
-            Track(Source(pa, loopback, "THEM"), self._engine.stream(self.language)),
-            Track(Source(pa, mic, "YOU"), self._engine.stream(self.language)),
+            Track(Source(pa, loopback, "THEM"), self._engine.stream(language)),
+            Track(Source(pa, mic, "YOU"), self._engine.stream(language)),
         ]
         started = datetime.now()
         self.call_id = storage.new_call_id(started)
@@ -175,4 +189,5 @@ class Recorder:
                 self._engine.free_stream(tr.stream)
             duration = time.perf_counter() - start
             storage.save_call(self.call_id, started, duration, lines,
-                              {tr.source.label: tr.recorded for tr in tracks})
+                              {tr.source.label: tr.recorded for tr in tracks}, keep_audio=prefs["keep_audio"])
+            self.on_event({"type": "saved", "call_id": self.call_id})
