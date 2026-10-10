@@ -98,6 +98,10 @@ class Engine:
         self._streams.append(s)
         return s
 
+    def free_stream(self, stream):
+        stream.free()
+        self._streams.remove(stream)
+
     def close(self):
         for s in self._streams:
             s.free()
@@ -132,7 +136,7 @@ class Stream:
         self._e._check(self._lib.transcribe_stream_finalize(self._session, C.byref(upd)), "stream_finalize")
 
     def text(self):
-        """(committed, tentative), copied out — pointers die on the next feed."""
+        """(committed, tentative), copied out; pointers die on the next feed."""
         t = _StreamText()
         self._lib.transcribe_stream_text_init(C.byref(t))
         self._lib.transcribe_stream_get_text(self._session, C.byref(t))

@@ -1,0 +1,533 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>minute</title>
+<style>
+  :root {
+    --bg: #f7f6f1;
+    --card: #ffffff;
+    --ink: #1b1b1d;
+    --muted: #75736d;
+    --faint: #aeaba3;
+    --line: #e6e3da;
+    --hover: #eeece5;
+    --chip: #ffffff;
+    --dark: #1d1d20;
+    --on-dark: #f7f6f1;
+    --rec: #e5484d;
+    --live: #3fb950;
+    --them: #ecE9e1;
+    --shadow: 0 10px 40px rgba(30, 28, 20, .12), 0 1px 3px rgba(30, 28, 20, .08);
+    --serif: "Iowan Old Style", "Charter", Georgia, "Times New Roman", serif;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161618;
+      --card: #1e1e21;
+      --ink: #ececea;
+      --muted: #96948e;
+      --faint: #5e5d59;
+      --line: #2c2c2f;
+      --hover: #232326;
+      --chip: #1e1e21;
+      --dark: #ececea;
+      --on-dark: #161618;
+      --them: #29292c;
+      --shadow: 0 10px 40px rgba(0, 0, 0, .5), 0 1px 3px rgba(0, 0, 0, .4);
+      color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font: 15px/1.6 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+  svg { display: block; }
+  .hidden { display: none !important; }
+
+  /* --- top bar --- */
+  .topbar {
+    height: 64px; padding: 0 22px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -.01em; }
+  .brand img { width: 26px; height: 26px; }
+  .navpill {
+    display: flex; align-items: center; height: 36px; padding: 0 4px;
+    border: 1px solid var(--line); border-radius: 999px; background: var(--chip);
+  }
+  .navpill button { width: 32px; height: 28px; display: grid; place-items: center; border-radius: 999px; color: var(--muted); }
+  .navpill button:hover { background: var(--hover); color: var(--ink); }
+  .right { display: flex; align-items: center; gap: 8px; }
+  .btn-dark {
+    height: 36px; padding: 0 16px; border-radius: 999px;
+    background: var(--dark); color: var(--on-dark); font-weight: 600; font-size: 14px;
+    display: flex; align-items: center; gap: 8px;
+    transition: transform .08s ease, opacity .15s;
+  }
+  .btn-dark:active { transform: scale(.97); }
+  .btn-dark:disabled { opacity: .5; cursor: default; }
+  .btn-dark .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); }
+  .btn-dark .sq { width: 9px; height: 9px; border-radius: 2px; background: currentColor; }
+  .icon-btn { width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; color: var(--muted); }
+  .icon-btn:hover { background: var(--hover); color: var(--ink); }
+
+  .menu {
+    position: absolute; top: 56px; right: 22px; z-index: 20; min-width: 200px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+    padding: 6px;
+  }
+  .menu button { display: block; width: 100%; text-align: left; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
+  .menu button:hover { background: var(--hover); }
+  .menu .danger { color: var(--rec); }
+  .menu hr { border: 0; border-top: 1px solid var(--line); margin: 6px 4px; }
+
+  .scroll { height: calc(100% - 64px); overflow-y: auto; }
+  .page { max-width: 700px; margin: 0 auto; padding: 18px 40px 160px; }
+
+  /* --- home --- */
+  .home h1 { font: 400 34px/1.15 var(--serif); letter-spacing: -.01em; margin: 6px 0 26px; }
+  .group { display: flex; gap: 8px; align-items: baseline; margin: 26px 0 6px; font-size: 13px; font-weight: 600; }
+  .group span { color: var(--faint); font-weight: 500; }
+  .row {
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+    padding: 11px 12px; margin: 0 -12px; border-radius: 10px;
+  }
+  .row:hover { background: var(--hover); }
+  .row .doc {
+    width: 34px; height: 34px; flex: none; border-radius: 9px;
+    display: grid; place-items: center; background: var(--card); border: 1px solid var(--line); color: var(--muted);
+  }
+  .row.live .doc { color: var(--rec); }
+  .row .title { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .empty { text-align: center; color: var(--muted); padding: 70px 20px; }
+  .empty img { width: 56px; height: 56px; margin-bottom: 16px; }
+  .empty h2 { font: 400 24px/1.2 var(--serif); color: var(--ink); margin: 0 0 8px; }
+  .empty p { margin: 0 auto; max-width: 380px; }
+
+  /* --- note --- */
+  .note-title {
+    font: 400 38px/1.15 var(--serif); letter-spacing: -.012em;
+    margin: 4px 0 16px; outline: none; overflow-wrap: anywhere;
+  }
+  .note-title:empty::before { content: attr(data-placeholder); color: var(--faint); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .chip {
+    height: 32px; padding: 0 12px; border-radius: 999px;
+    display: flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--muted); font-size: 13.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .chip.rec { color: var(--ink); }
+  .chip.rec i { width: 7px; height: 7px; border-radius: 50%; background: var(--rec); animation: pulse 1.6s ease-in-out infinite; }
+  textarea.notes {
+    width: 100%; min-height: 50vh; resize: none; border: 0; outline: none; background: transparent;
+    font: 16px/1.7 var(--sans); color: var(--ink); padding: 0;
+  }
+  textarea.notes::placeholder { color: var(--faint); }
+
+  /* --- transcript dock + panel --- */
+  .dock {
+    position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 10;
+    height: 40px; padding: 0 16px 0 14px; border-radius: 999px;
+    display: flex; align-items: center; gap: 10px;
+    background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
+    font-size: 14px; font-weight: 500;
+  }
+  .dock:hover { background: var(--hover); }
+  .dock .wave { display: flex; align-items: center; gap: 2px; height: 16px; }
+  .dock .wave i { width: 3px; height: 4px; border-radius: 1.5px; background: var(--faint); transition: height .12s ease-out; }
+  .dock.live .wave i { background: var(--live); }
+  .dock .chev { color: var(--muted); transition: transform .2s; }
+  .dock.open .chev { transform: rotate(180deg); }
+  .panel {
+    position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: 9;
+    width: min(640px, calc(100% - 48px)); max-height: 58vh; overflow-y: auto;
+    background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+    padding: 18px 22px;
+  }
+  .panel h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; }
+  .panel h3 button { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .panel h3 button:hover { color: var(--ink); }
+  .block { display: grid; grid-template-columns: 58px 1fr; gap: 12px; padding: 7px 0; font-size: 14.5px; }
+  .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; padding: 2px 7px; border-radius: 5px; justify-self: start; height: fit-content; margin-top: 2px; }
+  .tag.YOU { background: var(--dark); color: var(--on-dark); }
+  .tag.THEM { background: var(--them); color: var(--ink); }
+  .time { display: block; color: var(--faint); font-size: 11px; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .text { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .ghost { color: var(--faint); }
+
+  .toast {
+    position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 30;
+    background: var(--dark); color: var(--on-dark); padding: 8px 16px; border-radius: 999px; font-size: 13.5px;
+  }
+  .toast.error { background: var(--rec); color: #fff; }
+  @keyframes pulse { 50% { opacity: .3; } }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div class="brand" id="brand"><img src="icon.png" alt="">minute</div>
+  <div class="navpill hidden" id="nav">
+    <button id="back" title="Back"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
+    <button id="home-btn" title="Home"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5v-4h-4v4H2.5z"/></svg></button>
+  </div>
+  <div class="right">
+    <span class="chip rec hidden" id="rec-chip"><i></i><span id="rec-time">00:00</span></span>
+    <button class="btn-dark" id="primary"><span class="dot"></span><span id="primary-label">New note</span></button>
+    <button class="icon-btn hidden" id="more" title="More"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><circle cx="4" cy="9" r="1.4"/><circle cx="9" cy="9" r="1.4"/><circle cx="14" cy="9" r="1.4"/></svg></button>
+  </div>
+</div>
+<div class="menu hidden" id="menu">
+  <button data-act="copy-notes">Copy notes</button>
+  <button data-act="copy-transcript">Copy transcript</button>
+  <button data-act="folder">Open folder</button>
+  <hr>
+  <button data-act="delete" class="danger">Delete</button>
+</div>
+
+<div class="scroll" id="scroll">
+  <section class="page home" id="home"></section>
+  <section class="page hidden" id="note">
+    <h1 class="note-title" id="title" contenteditable="true" spellcheck="false" data-placeholder="New call"></h1>
+    <div class="chips" id="chips"></div>
+    <textarea class="notes" id="notes" placeholder="Write notes"></textarea>
+  </section>
+</div>
+
+<div class="panel hidden" id="panel"></div>
+<button class="dock hidden" id="dock">
+  <span class="wave" id="wave"><i></i><i></i><i></i><i></i></span>
+  <span>Transcript</span>
+  <svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m3 7.5 3-3 3 3"/></svg>
+</button>
+<div class="toast hidden" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const api = () => window.pywebview.api;
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const ICON_DOC = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M4 1.8h5.5L12.5 5v9.2h-8.5z"/><path d="M9.3 2v3.2h3" /><path d="M6.3 8.5h4M6.3 11h3" stroke-linecap="round"/></svg>`;
+const ICON_CAL = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.8" y="2.6" width="10.4" height="9.6" rx="2"/><path d="M1.8 5.6h10.4M4.6 1.3v2.4M9.4 1.3v2.4" stroke-linecap="round"/></svg>`;
+const ICON_CLOCK = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="5.4"/><path d="M7 4.2V7l1.9 1.3"/></svg>`;
+
+const ui = {
+  state: "idle",
+  calls: [],
+  view: "home",       // "home" | "note"
+  call: null,         // saved call {id, title, started, duration, blocks, notes}
+  live: null,         // {id, blocks, tentative, elapsed, title, notes}
+  panelOpen: false,
+};
+const viewingLive = () => ui.view === "note" && ui.live && !ui.call;
+
+/* --- formatting --- */
+const pad = (n) => String(n).padStart(2, "0");
+const clock = (s) => `${pad(Math.floor(s / 60))}:${pad(Math.floor(s) % 60)}`;
+function duration(s) {
+  if (s < 60) return `${s} sec`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+function day(iso) {
+  const d = new Date(iso), t = new Date(), y = new Date(); y.setDate(t.getDate() - 1);
+  if (d.toDateString() === t.toDateString()) return "Today";
+  if (d.toDateString() === y.toDateString()) return "Yesterday";
+  return d.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+}
+const hhmm = (iso) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+function toast(msg, error = false) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.toggle("error", error);
+  t.classList.remove("hidden");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.add("hidden"), error ? 6000 : 1600);
+}
+
+/* --- top bar --- */
+function renderTopbar() {
+  const inNote = ui.view === "note";
+  $("brand").classList.toggle("hidden", inNote);
+  $("nav").classList.toggle("hidden", !inNote);
+  $("rec-chip").classList.toggle("hidden", ui.state !== "recording");
+  $("more").classList.toggle("hidden", !(inNote && ui.call));
+  const p = $("primary");
+  p.disabled = ui.state === "loading" || ui.state === "saving";
+  const label = { loading: "Starting", saving: "Saving", recording: "Stop" }[ui.state] || "New note";
+  $("primary-label").textContent = label;
+  p.querySelector("span").className = ui.state === "recording" ? "sq" : "dot";
+}
+$("primary").addEventListener("click", () => {
+  if (ui.state === "idle") api().start();
+  else if (ui.state === "recording") api().stop();
+});
+$("back").addEventListener("click", () => showHome());
+$("home-btn").addEventListener("click", () => showHome());
+
+/* --- home --- */
+function renderHome() {
+  const el = $("home");
+  let html = `<h1>Your calls</h1>`;
+  if (ui.live) {
+    html += `<div class="group">Now</div>
+      <button class="row live" data-id="live"><span class="doc">${ICON_DOC}</span>
+      <span class="title">${esc(ui.live.title || "New call")}</span><span class="meta">Recording</span></button>`;
+  }
+  const groups = new Map();
+  for (const c of ui.calls) {
+    const g = day(c.started);
+    if (!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(c);
+  }
+  for (const [g, calls] of groups) {
+    html += `<div class="group">${g} <span>${calls.length}</span></div>`;
+    html += calls.map((c) => `<button class="row" data-id="${c.id}"><span class="doc">${ICON_DOC}</span>
+      <span class="title">${esc(c.title)}</span><span class="meta">${hhmm(c.started)} · ${duration(c.duration)}</span></button>`).join("");
+  }
+  if (!ui.live && !ui.calls.length) {
+    html = `<div class="empty"><img src="icon.png" alt=""><h2>No calls yet</h2>
+      <p>Start a new note when your call begins. minute listens to your mic and your speakers, so it works with Meet, Zoom, Teams and anything else.</p></div>`;
+  }
+  el.innerHTML = html;
+}
+$("home").addEventListener("click", (e) => {
+  const row = e.target.closest(".row");
+  if (row) row.dataset.id === "live" ? openLive() : openCall(row.dataset.id);
+});
+
+function showHome() {
+  ui.view = "home";
+  ui.call = null;
+  ui.panelOpen = false;
+  $("home").classList.remove("hidden");
+  $("note").classList.add("hidden");
+  $("menu").classList.add("hidden");
+  renderHome();
+  renderTopbar();
+  renderDock();
+}
+
+/* --- note --- */
+function showNote() {
+  ui.view = "note";
+  $("home").classList.add("hidden");
+  $("note").classList.remove("hidden");
+  $("scroll").scrollTop = 0;
+  renderNote();
+  renderTopbar();
+  renderDock();
+}
+async function openCall(id) {
+  ui.call = await api().get_call(id);
+  ui.panelOpen = false;
+  showNote();
+}
+function openLive() {
+  ui.call = null;
+  showNote();
+}
+
+function renderNote() {
+  const src = ui.call || ui.live;
+  if (!src) return;
+  if (document.activeElement !== $("title")) $("title").textContent = src.title || "";
+  if (document.activeElement !== $("notes")) $("notes").value = src.notes || "";
+  renderChips();
+  autosize();
+}
+function renderChips() {
+  if (ui.call) {
+    const c = ui.call;
+    $("chips").innerHTML = `<span class="chip">${ICON_CAL}${day(c.started)} ${hhmm(c.started)}</span>
+      <span class="chip">${ICON_CLOCK}${duration(c.duration)}</span>`;
+  } else if (ui.live) {
+    $("chips").innerHTML = `<span class="chip">${ICON_CAL}Today ${hhmm(new Date().toISOString())}</span>
+      <span class="chip rec"><i></i>${ui.state === "loading" ? "Starting" : "Recording"}</span>`;
+  }
+}
+function autosize() {
+  const t = $("notes");
+  t.style.height = "auto";
+  t.style.height = `${t.scrollHeight}px`;
+}
+
+// Title and notes save as you type. A live call gets its id only once recording
+// actually starts, so edits made while it loads are flushed then.
+let saveTimer = null;
+function currentId() { return ui.call ? ui.call.id : ui.live?.id; }
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSave, 500);
+}
+async function flushSave() {
+  const src = ui.call || ui.live, id = currentId();
+  if (!src || !id) return;
+  await api().save_notes(id, src.notes || "");
+  if (src.titleDirty) {
+    src.titleDirty = false;
+    await api().rename_call(id, src.title || "");
+    if (ui.call) ui.calls = await api().list_calls();
+  }
+}
+$("notes").addEventListener("input", () => {
+  const src = ui.call || ui.live;
+  if (!src) return;
+  src.notes = $("notes").value;
+  autosize();
+  scheduleSave();
+});
+$("title").addEventListener("input", () => {
+  const src = ui.call || ui.live;
+  if (!src) return;
+  src.title = $("title").textContent.trim();
+  src.titleDirty = true;
+  scheduleSave();
+});
+$("title").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("notes").focus(); }
+});
+
+/* --- menu --- */
+$("more").addEventListener("click", (e) => {
+  e.stopPropagation();
+  $("menu").classList.toggle("hidden");
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#menu")) $("menu").classList.add("hidden");
+});
+$("menu").addEventListener("click", async (e) => {
+  const act = e.target.closest("button")?.dataset.act;
+  const c = ui.call;
+  $("menu").classList.add("hidden");
+  if (!act || !c) return;
+  if (act === "copy-notes") {
+    await navigator.clipboard.writeText(c.notes || "");
+    toast("Notes copied");
+  } else if (act === "copy-transcript") {
+    await navigator.clipboard.writeText(c.blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
+    toast("Transcript copied");
+  } else if (act === "folder") {
+    api().open_folder(c.id);
+  } else if (act === "delete") {
+    if (!confirm(`Delete "${c.title}"? Notes, transcript and audio will be removed.`)) return;
+    await api().delete_call(c.id);
+    ui.calls = await api().list_calls();
+    showHome();
+  }
+});
+
+/* --- transcript dock + panel --- */
+function blocksHtml(blocks, tentative) {
+  const out = blocks.map((b) => ({ ...b, ghost: "" }));
+  for (const label of ["THEM", "YOU"]) {
+    const t = tentative?.[label]?.trim();
+    if (!t) continue;
+    const last = out[out.length - 1];
+    if (last && last.label === label) last.ghost = t;
+    else out.push({ label, t: "", text: "", ghost: t });
+  }
+  return out.map((b) => `<div class="block">
+      <div><span class="tag ${b.label}">${b.label}</span><span class="time">${b.t}</span></div>
+      <div class="text">${esc(b.text.trim())}${b.ghost ? ` <span class="ghost">${esc(b.ghost)}</span>` : ""}</div>
+    </div>`).join("");
+}
+function renderDock() {
+  const show = ui.view === "note";
+  $("dock").classList.toggle("hidden", !show);
+  $("dock").classList.toggle("live", viewingLive() && ui.state === "recording");
+  $("dock").classList.toggle("open", ui.panelOpen);
+  $("panel").classList.toggle("hidden", !(show && ui.panelOpen));
+  if (show && ui.panelOpen) renderPanel();
+}
+function renderPanel() {
+  const p = $("panel");
+  const live = viewingLive();
+  const blocks = live ? ui.live.blocks : ui.call?.blocks || [];
+  const atBottom = p.scrollHeight - p.scrollTop - p.clientHeight < 40;
+  const body = blocksHtml(blocks, live ? ui.live.tentative : null);
+  const empty = live ? "Listening. Text appears here as people speak." : "Nothing was transcribed.";
+  p.innerHTML = `<h3>Transcript ${live ? "" : `<button id="copy-tr">Copy</button>`}</h3>${body || `<p class="ghost">${empty}</p>`}`;
+  if (live && atBottom) p.scrollTop = p.scrollHeight;
+  $("copy-tr")?.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
+    toast("Transcript copied");
+  });
+}
+$("dock").addEventListener("click", () => {
+  ui.panelOpen = !ui.panelOpen;
+  renderDock();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && ui.panelOpen) { ui.panelOpen = false; renderDock(); }
+});
+function setWave(level) {
+  [...$("wave").children].forEach((b, i) => {
+    b.style.height = `${4 + Math.round(12 * Math.min(1, level * 1.6) * [0.6, 1, 0.8, 0.5][i])}px`;
+  });
+}
+
+/* --- events from Python --- */
+window.minute = {
+  async onEvent(ev) {
+    if (ev.type === "state") {
+      const prev = ui.state;
+      ui.state = ev.state;
+      if (ev.state === "loading" && prev === "idle") {
+        ui.live = { id: null, blocks: [], tentative: {}, elapsed: 0, title: "", notes: "" };
+        openLive();
+        $("notes").focus();
+      }
+      if (ev.state === "recording" && ui.live && !ui.live.id) {
+        ui.live.id = ev.call_id;
+        flushSave();
+      }
+      if (ev.state === "idle" && prev !== "idle") {
+        clearTimeout(saveTimer);
+        await flushSave();
+        const wasViewing = viewingLive();
+        ui.live = null;
+        ui.calls = await api().list_calls();
+        setWave(0);
+        if (wasViewing && ev.call_id && ui.calls.some((c) => c.id === ev.call_id)) await openCall(ev.call_id);
+        else if (ui.view === "home") renderHome();
+      }
+      renderTopbar();
+      if (ui.view === "note") { renderChips(); renderDock(); }
+      if (ui.view === "home") renderHome();
+    } else if (ev.type === "text" && ui.live) {
+      const blocks = ui.live.blocks, last = blocks[blocks.length - 1];
+      if (ev.delta) {
+        if (last && last.label === ev.label) last.text += ev.delta;
+        else if (ev.delta.trim()) blocks.push({ label: ev.label, t: ev.t, text: ev.delta });
+      }
+      ui.live.tentative[ev.label] = ev.tentative;
+      if (viewingLive() && ui.panelOpen) renderPanel();
+    } else if (ev.type === "levels" && ui.live) {
+      ui.live.elapsed = ev.elapsed;
+      $("rec-time").textContent = clock(ev.elapsed);
+      if (viewingLive()) setWave(Math.max(ev.YOU || 0, ev.THEM || 0));
+    } else if (ev.type === "error") {
+      toast(`Something went wrong: ${ev.message}`, true);
+    }
+  },
+};
+
+window.addEventListener("pywebviewready", async () => {
+  ui.calls = await api().list_calls();
+  const s = await api().status();
+  ui.state = s.state;
+  showHome();
+});
+</script>
+</body>
+</html>
