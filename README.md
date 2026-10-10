@@ -1,3 +1,5 @@
+<img src="assets/icon.png" width="96" alt="minute icon">
+
 # minute
 
 Local meeting notes for Windows. `minute` listens to your calls — Meet, Zoom, Teams, anything — by capturing system audio (them) and your microphone (you), transcribes both live on your machine, and saves a transcript.
