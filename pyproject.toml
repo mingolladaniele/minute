@@ -10,3 +10,8 @@ dependencies = [
     "pystray>=0.19.5",
     "pywebview>=6.2.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.22.3",
+]

@@ -1,14 +1,16 @@
-"""Calls on disk: recordings/<call_id>/ with meta.json, blocks.json, transcript.md and one WAV per track."""
+"""Calls on disk: <recordings>/<call_id>/ with meta.json, blocks.json, transcript.md, notes.md and one WAV per track.
+
+meta.json "title_source" says who named the call: "default", "user" or "ai".
+AI titles never overwrite a name the user chose.
+"""
 import json
-import os
+import shutil
 import wave
-from pathlib import Path
 
 import numpy as np
 
+from minute import settings
 from minute.capture import TARGET_RATE
-
-ROOT = Path(os.environ.get("MINUTE_RECORDINGS", Path(__file__).resolve().parent.parent / "recordings"))
 
 
 def new_call_id(started):
@@ -16,7 +18,7 @@ def new_call_id(started):
 
 
 def call_dir(call_id):
-    return ROOT / call_id
+    return settings.recordings_dir() / call_id
 
 
 def merge_blocks(lines):
@@ -42,9 +44,8 @@ def _write_wav(path, chunks):
 
 
 def _read_meta(call_id):
-    f = call_dir(call_id) / "meta.json"
     try:
-        return json.loads(f.read_text(encoding="utf-8"))
+        return json.loads((call_dir(call_id) / "meta.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
 
@@ -55,26 +56,40 @@ def _write_meta(call_id, meta):
     (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def save_call(call_id, started, duration, lines, audio):
+def _write_transcript(call_id, meta, blocks):
+    md = [f"# {meta['title']}", f"_{meta['started'].replace('T', ' ')}_"]
+    md += [f"**{b['label']}** `{b['t']}`\n{b['text']}" for b in blocks]
+    (call_dir(call_id) / "transcript.md").write_text("\n\n".join(md) + "\n", encoding="utf-8")
+
+
+def save_call(call_id, started, duration, lines, audio, keep_audio=True):
     d = call_dir(call_id)
     d.mkdir(parents=True, exist_ok=True)
     blocks = merge_blocks(lines)
     # The title may already have been edited while the call was live.
-    title = _read_meta(call_id).get("title") or f"Call {started:%H:%M}"
-    meta = {"id": call_id, "title": title, "started": started.isoformat(timespec="seconds"),
-            "duration": round(duration)}
+    existing = _read_meta(call_id)
+    meta = {
+        "id": call_id,
+        "title": existing.get("title") or f"Call {started:%H:%M}",
+        "title_source": existing.get("title_source", "default"),
+        "started": started.isoformat(timespec="seconds"),
+        "duration": round(duration),
+    }
     _write_meta(call_id, meta)
     (d / "blocks.json").write_text(json.dumps(blocks, ensure_ascii=False, indent=2), encoding="utf-8")
-    md = [f"# {title}, {started:%Y-%m-%d %H:%M}"]
-    md += [f"**{b['label']}** `{b['t']}`\n{b['text']}" for b in blocks]
-    (d / "transcript.md").write_text("\n\n".join(md) + "\n", encoding="utf-8")
-    for label, chunks in audio.items():
-        _write_wav(d / f"{label.lower()}.wav", chunks)
+    _write_transcript(call_id, meta, blocks)
+    if keep_audio:
+        for label, chunks in audio.items():
+            _write_wav(d / f"{label.lower()}.wav", chunks)
     return d
 
 
-def rename_call(call_id, title):
-    _write_meta(call_id, {**_read_meta(call_id), "id": call_id, "title": title.strip()})
+def rename_call(call_id, title, source="user"):
+    meta = {**_read_meta(call_id), "id": call_id, "title": title.strip(), "title_source": source}
+    _write_meta(call_id, meta)
+    blocks_file = call_dir(call_id) / "blocks.json"
+    if "started" in meta and blocks_file.exists():
+        _write_transcript(call_id, meta, json.loads(blocks_file.read_text(encoding="utf-8")))
 
 
 def save_notes(call_id, text):
@@ -85,10 +100,11 @@ def save_notes(call_id, text):
 
 def list_calls():
     """Finished calls, newest first (a live call has no duration yet)."""
-    if not ROOT.exists():
+    root = settings.recordings_dir()
+    if not root.exists():
         return []
     calls = []
-    for meta in ROOT.glob("*/meta.json"):
+    for meta in root.glob("*/meta.json"):
         try:
             m = json.loads(meta.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -106,7 +122,4 @@ def load_call(call_id):
 
 
 def delete_call(call_id):
-    d = call_dir(call_id)
-    for f in d.iterdir():
-        f.unlink()
-    d.rmdir()
+    shutil.rmtree(call_dir(call_id))

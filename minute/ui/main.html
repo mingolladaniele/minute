@@ -165,6 +165,59 @@
   .text { white-space: pre-wrap; overflow-wrap: anywhere; }
   .ghost { color: var(--faint); }
 
+  .naming { color: var(--faint); animation: pulse 1.6s ease-in-out infinite; }
+  .row .title.naming { font-weight: 500; }
+  .note-title.naming::after { content: "Naming with AI…"; display: block; margin-top: 6px; font: 400 14px var(--sans); color: var(--faint); }
+
+  /* --- banner (model download) --- */
+  .banner {
+    display: flex; align-items: center; gap: 16px; margin: 0 0 22px; padding: 14px 16px;
+    border: 1px solid var(--line); border-radius: 14px; background: var(--card);
+  }
+  .banner .msg { flex: 1; font-size: 14px; }
+  .banner .msg b { display: block; font-weight: 600; }
+  .banner .msg span { color: var(--muted); }
+  .progress { height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; margin-top: 8px; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--ink); transition: width .2s; }
+
+  /* --- settings --- */
+  .settings h1 { font: 400 34px/1.15 var(--serif); letter-spacing: -.01em; margin: 6px 0 8px; }
+  .settings h2 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 30px 0 8px; }
+  .card { border: 1px solid var(--line); border-radius: 14px; background: var(--card); }
+  .setting { display: flex; align-items: center; gap: 16px; padding: 14px 16px; }
+  .setting + .setting { border-top: 1px solid var(--line); }
+  .setting .label { flex: 1; min-width: 0; }
+  .setting .label b { display: block; font-weight: 500; font-size: 14.5px; }
+  .setting .label span { display: block; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+  .setting .label span span { display: inline; }
+  .card > div:not(.setting) { border-top: 1px solid var(--line); }
+  .setting select, .setting input[type=text], .setting input[type=password] {
+    font: 14px var(--sans); color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 9px; padding: 7px 10px; min-width: 0;
+  }
+  .setting input[type=text], .setting input[type=password] { width: 230px; }
+  .setting select:focus, .setting input:focus { outline: 2px solid color-mix(in srgb, var(--ink) 25%, transparent); outline-offset: 1px; }
+  .btn-line {
+    height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--chip); font-size: 13.5px; font-weight: 500; white-space: nowrap;
+  }
+  .btn-line:hover { background: var(--hover); }
+  .switch { position: relative; width: 40px; height: 24px; flex: none; }
+  .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; z-index: 1; }
+  .switch i { position: absolute; inset: 0; border-radius: 999px; background: var(--line); transition: background .15s; }
+  .switch i::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s;
+  }
+  .switch input:checked + i { background: var(--live); }
+  .switch input:checked + i::after { transform: translateX(16px); }
+  .seg { display: flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+  .seg button { padding: 4px 12px; border-radius: 999px; font-size: 13px; color: var(--muted); }
+  .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
+  .ok { color: var(--live); }
+  .bad { color: var(--rec); }
+  .dim { opacity: .45; pointer-events: none; }
+
   .toast {
     position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 30;
     background: var(--dark); color: var(--on-dark); padding: 8px 16px; border-radius: 999px; font-size: 13.5px;
@@ -183,6 +236,7 @@
   <div class="right">
     <span class="chip rec hidden" id="rec-chip"><i></i><span id="rec-time">00:00</span></span>
     <button class="btn-dark" id="primary"><span class="dot"></span><span id="primary-label">New note</span></button>
+    <button class="icon-btn" id="gear" title="Settings"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5.5h8M15 5.5h2M3 14.5h2M9 14.5h8"/><circle cx="13" cy="5.5" r="2"/><circle cx="7" cy="14.5" r="2"/></svg></button>
     <button class="icon-btn hidden" id="more" title="More"><svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor"><circle cx="4" cy="9" r="1.4"/><circle cx="9" cy="9" r="1.4"/><circle cx="14" cy="9" r="1.4"/></svg></button>
   </div>
 </div>
@@ -190,6 +244,7 @@
   <button data-act="copy-notes">Copy notes</button>
   <button data-act="copy-transcript">Copy transcript</button>
   <button data-act="folder">Open folder</button>
+  <button data-act="retitle">Regenerate title</button>
   <hr>
   <button data-act="delete" class="danger">Delete</button>
 </div>
@@ -201,6 +256,7 @@
     <div class="chips" id="chips"></div>
     <textarea class="notes" id="notes" placeholder="Write notes"></textarea>
   </section>
+  <section class="page settings hidden" id="settings"></section>
 </div>
 
 <div class="panel hidden" id="panel"></div>
@@ -226,6 +282,8 @@ const ui = {
   call: null,         // saved call {id, title, started, duration, blocks, notes}
   live: null,         // {id, blocks, tentative, elapsed, title, notes}
   panelOpen: false,
+  naming: new Set(),  // call ids whose AI title is being generated
+  model: { ready: true, downloading: false, done: 0, total: 0, error: "" },
 };
 const viewingLive = () => ui.view === "note" && ui.live && !ui.call;
 
@@ -256,11 +314,12 @@ function toast(msg, error = false) {
 
 /* --- top bar --- */
 function renderTopbar() {
-  const inNote = ui.view === "note";
-  $("brand").classList.toggle("hidden", inNote);
-  $("nav").classList.toggle("hidden", !inNote);
+  const inPage = ui.view !== "home";
+  $("brand").classList.toggle("hidden", inPage);
+  $("nav").classList.toggle("hidden", !inPage);
+  $("gear").classList.toggle("hidden", inPage);
   $("rec-chip").classList.toggle("hidden", ui.state !== "recording");
-  $("more").classList.toggle("hidden", !(inNote && ui.call));
+  $("more").classList.toggle("hidden", !(ui.view === "note" && ui.call));
   const p = $("primary");
   p.disabled = ui.state === "loading" || ui.state === "saving";
   const label = { loading: "Starting", saving: "Saving", recording: "Stop" }[ui.state] || "New note";
@@ -268,16 +327,20 @@ function renderTopbar() {
   p.querySelector("span").className = ui.state === "recording" ? "sq" : "dot";
 }
 $("primary").addEventListener("click", () => {
-  if (ui.state === "idle") api().start();
+  if (ui.state === "idle" && !ui.model.ready) {
+    showHome();
+    toast("Download the speech model first");
+  } else if (ui.state === "idle") api().start();
   else if (ui.state === "recording") api().stop();
 });
 $("back").addEventListener("click", () => showHome());
 $("home-btn").addEventListener("click", () => showHome());
+$("gear").addEventListener("click", () => showSettings());
 
 /* --- home --- */
 function renderHome() {
   const el = $("home");
-  let html = `<h1>Your calls</h1>`;
+  let html = `<h1>Your calls</h1>${modelBanner()}`;
   if (ui.live) {
     html += `<div class="group">Now</div>
       <button class="row live" data-id="live"><span class="doc">${ICON_DOC}</span>
@@ -292,10 +355,10 @@ function renderHome() {
   for (const [g, calls] of groups) {
     html += `<div class="group">${g} <span>${calls.length}</span></div>`;
     html += calls.map((c) => `<button class="row" data-id="${c.id}"><span class="doc">${ICON_DOC}</span>
-      <span class="title">${esc(c.title)}</span><span class="meta">${hhmm(c.started)} · ${duration(c.duration)}</span></button>`).join("");
+      <span class="title ${ui.naming.has(c.id) ? "naming" : ""}">${esc(c.title)}</span><span class="meta">${hhmm(c.started)} · ${duration(c.duration)}</span></button>`).join("");
   }
   if (!ui.live && !ui.calls.length) {
-    html = `<div class="empty"><img src="icon.png" alt=""><h2>No calls yet</h2>
+    html = `${modelBanner()}<div class="empty"><img src="icon.png" alt=""><h2>No calls yet</h2>
       <p>Start a new note when your call begins. minute listens to your mic and your speakers, so it works with Meet, Zoom, Teams and anything else.</p></div>`;
   }
   el.innerHTML = html;
@@ -311,6 +374,7 @@ function showHome() {
   ui.panelOpen = false;
   $("home").classList.remove("hidden");
   $("note").classList.add("hidden");
+  $("settings").classList.add("hidden");
   $("menu").classList.add("hidden");
   renderHome();
   renderTopbar();
@@ -321,6 +385,7 @@ function showHome() {
 function showNote() {
   ui.view = "note";
   $("home").classList.add("hidden");
+  $("settings").classList.add("hidden");
   $("note").classList.remove("hidden");
   $("scroll").scrollTop = 0;
   renderNote();
@@ -341,6 +406,7 @@ function renderNote() {
   const src = ui.call || ui.live;
   if (!src) return;
   if (document.activeElement !== $("title")) $("title").textContent = src.title || "";
+  $("title").classList.toggle("naming", !!ui.call && ui.naming.has(ui.call.id));
   if (document.activeElement !== $("notes")) $("notes").value = src.notes || "";
   renderChips();
   autosize();
@@ -418,6 +484,8 @@ $("menu").addEventListener("click", async (e) => {
     toast("Transcript copied");
   } else if (act === "folder") {
     api().open_folder(c.id);
+  } else if (act === "retitle") {
+    api().retitle(c.id);
   } else if (act === "delete") {
     if (!confirm(`Delete "${c.title}"? Notes, transcript and audio will be removed.`)) return;
     await api().delete_call(c.id);
@@ -476,6 +544,118 @@ function setWave(level) {
   });
 }
 
+/* --- speech model (first run on a machine without Handy) --- */
+function modelBanner() {
+  const m = ui.model;
+  if (m.ready) return "";
+  const mb = (b) => Math.round(b / 1048576);
+  if (m.downloading) {
+    const pct = m.total ? Math.round((m.done * 100) / m.total) : 0;
+    return `<div class="banner"><div class="msg"><b>Downloading the speech model</b>
+      <span>${mb(m.done)} of ${mb(m.total) || "?"} MB. You can keep using minute meanwhile.</span>
+      <div class="progress"><i style="width:${pct}%"></i></div></div></div>`;
+  }
+  return `<div class="banner"><div class="msg"><b>One more step</b>
+    <span>${m.error ? `Download failed: ${esc(m.error)}` : "minute needs its speech model (about 750 MB, downloaded once)."}</span></div>
+    <button class="btn-dark" id="dl-model">${m.error ? "Retry" : "Download"}</button></div>`;
+}
+$("home").addEventListener("click", (e) => {
+  if (e.target.closest("#dl-model")) {
+    ui.model.downloading = true;
+    ui.model.error = "";
+    api().download_model();
+    renderHome();
+  }
+});
+
+/* --- settings --- */
+const LANGUAGES = [
+  ["it-IT", "Italian"], ["en-US", "English (US)"], ["en-GB", "English (UK)"], ["es-ES", "Spanish"],
+  ["fr-FR", "French"], ["de-DE", "German"], ["pt-BR", "Portuguese (Brazil)"], ["pt-PT", "Portuguese (Portugal)"],
+  ["nl-NL", "Dutch"], ["pl-PL", "Polish"], ["ru-RU", "Russian"], ["uk-UA", "Ukrainian"], ["tr-TR", "Turkish"],
+  ["ja-JP", "Japanese"], ["ko-KR", "Korean"], ["zh-CN", "Chinese"], ["hi-IN", "Hindi"], ["ar-AR", "Arabic"],
+  ["auto", "Detect automatically"],
+];
+let prefs = null;
+
+async function showSettings() {
+  ui.view = "settings";
+  ui.call = null;
+  ui.panelOpen = false;
+  $("home").classList.add("hidden");
+  $("note").classList.add("hidden");
+  $("settings").classList.remove("hidden");
+  $("menu").classList.add("hidden");
+  $("scroll").scrollTop = 0;
+  prefs = await api().get_settings();
+  renderSettings();
+  renderTopbar();
+  renderDock();
+}
+
+const toggle = (key, on) => `<label class="switch"><input type="checkbox" data-key="${key}" ${on ? "checked" : ""}><i></i></label>`;
+
+function renderSettings() {
+  const p = prefs, custom = p.ai_key_source === "custom";
+  const piState = p.pi_key_available ? `<span class="ok">found</span>` : `<span class="bad">not found</span>`;
+  $("settings").innerHTML = `
+    <h1>Settings</h1>
+    <h2>General</h2>
+    <div class="card">
+      <div class="setting"><div class="label"><b>Open at login</b><span>Start minute in the tray when you sign in to Windows.</span></div>${toggle("launch_at_startup", p.launch_at_startup)}</div>
+      <div class="setting"><div class="label"><b>Language</b><span>What your calls are spoken in. A fixed language is more accurate than detection.</span></div>
+        <select data-key="language">${LANGUAGES.map(([v, n]) => `<option value="${v}" ${v === p.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+    </div>
+    <h2>Recordings</h2>
+    <div class="card">
+      <div class="setting"><div class="label"><b>Folder</b><span>${esc(p.recordings_dir)}</span></div><button class="btn-line" id="pick-folder">Change</button></div>
+      <div class="setting"><div class="label"><b>Keep audio</b><span>Save you.wav and them.wav next to the transcript (about 2 MB per minute).</span></div>${toggle("keep_audio", p.keep_audio)}</div>
+    </div>
+    <h2>AI titles</h2>
+    <div class="card">
+      <div class="setting"><div class="label"><b>Name calls with AI</b><span>When a call ends, your notes and the transcript are sent to the model below to write a title. Calls you rename yourself are never touched.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
+      <div class="${p.ai_titles ? "" : "dim"}">
+        <div class="setting"><div class="label"><b>API key</b><span>${custom ? "Your own key, stored in %APPDATA%\\minute." : `DeepSeek key from your pi coding agent: ${piState}.`}</span></div>
+          <div class="seg" id="key-source"><button data-v="pi" class="${custom ? "" : "on"}">From pi</button><button data-v="custom" class="${custom ? "on" : ""}">Custom</button></div></div>
+        ${custom ? `<div class="setting"><div class="label"><b>Key</b></div><input type="password" data-key="ai_key" placeholder="sk-..." value="${esc(p.ai_key)}"></div>` : ""}
+        <div class="setting"><div class="label"><b>Model</b><span>Any OpenAI-compatible chat API works.</span></div><input type="text" data-key="ai_model" value="${esc(p.ai_model)}"></div>
+        <div class="setting"><div class="label"><b>Endpoint</b></div><input type="text" data-key="ai_base_url" value="${esc(p.ai_base_url)}"></div>
+        <div class="setting"><div class="label"><b>Try it</b><span id="ai-test">Generate a title for a sample note.</span></div><button class="btn-line" id="test-ai">Test</button></div>
+      </div>
+    </div>`;
+}
+
+async function saveSetting(values) {
+  prefs = await api().save_settings(values);
+  toast("Saved");
+}
+$("settings").addEventListener("change", (e) => {
+  const el = e.target.closest("[data-key]");
+  if (!el) return;
+  const value = el.type === "checkbox" ? el.checked : el.value.trim();
+  saveSetting({ [el.dataset.key]: value }).then(() => {
+    if (el.dataset.key === "ai_titles") renderSettings();
+  });
+});
+$("settings").addEventListener("click", async (e) => {
+  const seg = e.target.closest("#key-source button");
+  if (seg) {
+    await saveSetting({ ai_key_source: seg.dataset.v });
+    renderSettings();
+  } else if (e.target.closest("#pick-folder")) {
+    const dir = await api().choose_folder();
+    if (dir) {
+      await saveSetting({ recordings_dir: dir });
+      ui.calls = await api().list_calls();
+      renderSettings();
+    }
+  } else if (e.target.closest("#test-ai")) {
+    $("ai-test").textContent = "Asking the model…";
+    const r = await api().test_ai();
+    $("ai-test").innerHTML = r.ok ? `<span class="ok">Works.</span> Title: “${esc(r.title || "")}”` : `<span class="bad">${esc(r.error)}</span>`;
+  }
+});
+
 /* --- events from Python --- */
 window.minute = {
   async onEvent(ev) {
@@ -516,16 +696,47 @@ window.minute = {
       ui.live.elapsed = ev.elapsed;
       $("rec-time").textContent = clock(ev.elapsed);
       if (viewingLive()) setWave(Math.max(ev.YOU || 0, ev.THEM || 0));
+    } else if (ev.type === "titling") {
+      ui.naming.add(ev.call_id);
+      refreshTitles();
+    } else if (ev.type === "title") {
+      ui.naming.delete(ev.call_id);
+      if (ev.title) {
+        ui.calls = await api().list_calls();
+        if (ui.call?.id === ev.call_id && document.activeElement !== $("title")) ui.call.title = ev.title;
+      } else if (ev.error) {
+        toast(`No AI title: ${ev.error}`, true);
+      }
+      refreshTitles();
+    } else if (ev.type === "model_missing") {
+      ui.model.ready = false;
+      showHome();
+    } else if (ev.type === "download") {
+      Object.assign(ui.model, { downloading: true, done: ev.done, total: ev.total });
+      if (ui.view === "home") renderHome();
+    } else if (ev.type === "download_done") {
+      Object.assign(ui.model, { ready: true, downloading: false });
+      toast("Speech model ready");
+      if (ui.view === "home") renderHome();
+    } else if (ev.type === "download_error") {
+      Object.assign(ui.model, { downloading: false, error: ev.message });
+      if (ui.view === "home") renderHome();
     } else if (ev.type === "error") {
       toast(`Something went wrong: ${ev.message}`, true);
     }
   },
 };
 
+function refreshTitles() {
+  if (ui.view === "home") renderHome();
+  else if (ui.view === "note" && ui.call) renderNote();
+}
+
 window.addEventListener("pywebviewready", async () => {
   ui.calls = await api().list_calls();
   const s = await api().status();
   ui.state = s.state;
+  Object.assign(ui.model, { ready: s.model_ready, downloading: s.downloading });
   showHome();
 });
 </script>
