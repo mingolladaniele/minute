@@ -250,6 +250,11 @@
   .engine.missing i { background: #e0a43a; }
   .engine.error i { background: var(--rec); }
 
+  .views { margin: -8px 0 22px; display: flex; }
+  .views .seg button { padding: 5px 14px; font-size: 13.5px; }
+  .enh-wait { color: var(--faint); font-size: 15px; padding: 4px 0; }
+  .enh-wait b { color: var(--muted); font-weight: 500; animation: pulse 1.6s ease-in-out infinite; }
+
   .toast {
     position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 30;
     background: var(--dark); color: var(--on-dark); padding: 8px 16px; border-radius: 999px; font-size: 13.5px;
@@ -274,6 +279,7 @@
 </div>
 <div class="menu hidden" id="menu">
   <button data-act="copy-notes">Copy notes</button>
+  <button data-act="regen-enhanced">Regenerate enhanced notes</button>
   <button data-act="copy-transcript">Copy transcript</button>
   <button data-act="folder">Open folder</button>
   <button data-act="retitle">Regenerate title</button>
@@ -286,7 +292,11 @@
   <section class="page hidden" id="note">
     <h1 class="note-title" id="title" contenteditable="true" spellcheck="false" data-placeholder="New call"></h1>
     <div class="chips" id="chips"></div>
+    <div class="views hidden" id="views"><div class="seg">
+      <button data-view="mine">My notes</button><button data-view="enhanced">✦ Enhanced</button>
+    </div></div>
     <div class="status hidden" id="status"></div>
+    <div class="enh-wait hidden" id="enh-wait"><b>Enhancing notes…</b> Your notes and the transcript are being turned into structured notes. Keep writing in My notes meanwhile.</div>
     <div class="notes" id="notes"></div>
   </section>
   <section class="page settings hidden" id="settings"></section>
@@ -317,6 +327,8 @@ const ui = {
   live: null,         // {id, blocks, tentative, elapsed, title, notes}
   panelOpen: false,
   naming: new Set(),  // call ids whose AI title is being generated
+  enhancing: new Set(),  // call ids whose enhanced notes are being generated
+  noteView: "mine",      // "mine" | "enhanced"
   model: { ready: true, downloading: false, done: 0, total: 0, error: "" },
   engine: { state: "unloaded", error: null },
 };
@@ -429,11 +441,13 @@ function showNote() {
 }
 async function openCall(id) {
   ui.call = await api().get_call(id);
+  ui.noteView = ui.call.enhanced ? "enhanced" : "mine";
   ui.panelOpen = false;
   showNote();
 }
 function openLive() {
   ui.call = null;
+  ui.noteView = "mine";
   showNote();
 }
 
@@ -442,12 +456,30 @@ function renderNote() {
   if (!src) return;
   if (document.activeElement !== $("title")) $("title").textContent = src.title || "";
   $("title").classList.toggle("naming", !!ui.call && ui.naming.has(ui.call.id));
-  if (document.activeElement !== $("notes")) editor.setMarkdown(src.notes || "");
+  const c = ui.call;
+  const enhancing = !!c && ui.enhancing.has(c.id);
+  const hasEnhanced = !!c && (c.enhanced || enhancing || c.enhanced_status === "pending");
+  if (!hasEnhanced) ui.noteView = "mine";
+  $("views").classList.toggle("hidden", !hasEnhanced);
+  for (const b of $("views").querySelectorAll("button")) b.classList.toggle("on", b.dataset.view === ui.noteView);
+  const waiting = ui.noteView === "enhanced" && !c.enhanced;
+  $("enh-wait").classList.toggle("hidden", !(waiting && enhancing));
+  $("notes").classList.toggle("hidden", waiting && enhancing);
+  if (document.activeElement !== $("notes")) editor.setMarkdown((ui.noteView === "enhanced" ? c.enhanced : src.notes) || "");
   renderChips();
   renderStatus();
 }
+$("views").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-view]");
+  if (!b || b.dataset.view === ui.noteView) return;
+  $("notes").blur();
+  ui.noteView = b.dataset.view;
+  renderNote();
+});
 function flag(c) {
   if (c.transcript === "pending") return `<span class="flag">${ui.transcribing === c.id ? "Transcribing…" : "Transcript pending"}</span>`;
+  if (ui.enhancing.has(c.id)) return `<span class="flag">Enhancing…</span>`;
+  if (c.enhanced_status === "pending" && c.enhanced_error) return `<span class="flag">Notes pending</span>`;
   if (c.title_status === "pending" && c.title_error) return `<span class="flag">Title pending</span>`;
   return "";
 }
@@ -459,6 +491,9 @@ function renderStatus() {
     html = `<div class="grow"><b>${doing ? "Transcribing from the saved audio…" : "Transcript pending"}</b><br>
       ${esc(c.transcript_error || "")}${c.has_audio ? ". The audio is saved: minute transcribes it on its own as soon as it can." : ""}</div>
       ${doing ? "" : `<button class="btn-line" data-retry="${c.id}">Retry now</button>`}`;
+  } else if (c && c.enhanced_status === "pending" && c.enhanced_error && !ui.enhancing.has(c.id)) {
+    html = `<div class="grow"><b>Enhanced notes not generated yet</b><br>${esc(c.enhanced_error)}. Your notes and the transcript are safe; minute retries every few minutes.</div>
+      <button class="btn-line" data-retry="${c.id}">Retry now</button>`;
   } else if (c && c.title_status === "pending" && c.title_error) {
     html = `<div class="grow"><b>AI title not generated yet</b><br>${esc(c.title_error)}. minute retries every few minutes.</div>
       <button class="btn-line" data-retry="${c.id}">Retry now</button>`;
@@ -476,6 +511,7 @@ async function refreshCall(id) {
     const fresh = await api().get_call(id);
     const keep = { notes: ui.call.notes };
     if (document.activeElement === $("title")) keep.title = ui.call.title;
+    if (ui.call.enhancedDirty || (ui.noteView === "enhanced" && document.activeElement === $("notes"))) keep.enhanced = ui.call.enhanced;
     ui.call = { ...fresh, ...keep };
     renderNote();
     if (ui.panelOpen) renderPanel();
@@ -509,6 +545,10 @@ async function flushSave() {
     src.notesDirty = false;
     await api().save_notes(id, src.notes || "");
   }
+  if (src.enhancedDirty && ui.call) {
+    src.enhancedDirty = false;
+    await api().save_enhanced(id, src.enhanced || "");
+  }
   if (src.titleDirty) {
     src.titleDirty = false;
     await api().rename_call(id, src.title || "");
@@ -519,8 +559,13 @@ async function flushSave() {
 const editor = (window.minuteEditor = NoteEditor.create($("notes"), (md) => {
   const src = ui.call || ui.live;
   if (!src) return;
-  src.notes = md;
-  src.notesDirty = true;
+  if (ui.call && ui.noteView === "enhanced") {
+    src.enhanced = md;
+    src.enhancedDirty = true;
+  } else {
+    src.notes = md;
+    src.notesDirty = true;
+  }
   scheduleSave();
 }));
 $("title").addEventListener("input", () => {
@@ -548,8 +593,15 @@ $("menu").addEventListener("click", async (e) => {
   $("menu").classList.add("hidden");
   if (!act || !c) return;
   if (act === "copy-notes") {
-    await navigator.clipboard.writeText(c.notes || "");
+    await navigator.clipboard.writeText((ui.noteView === "enhanced" ? c.enhanced : c.notes) || "");
     toast("Notes copied");
+  } else if (act === "regen-enhanced") {
+    if (c.enhanced_edited && !confirm("Regenerate the enhanced notes? Your edits to them will be replaced.")) return;
+    await api().regenerate_enhanced(c.id);
+    ui.enhancing.add(c.id);
+    c.enhanced = "";
+    ui.noteView = "enhanced";
+    renderNote();
   } else if (act === "copy-transcript") {
     await navigator.clipboard.writeText(c.blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
     toast("Transcript copied");
@@ -701,10 +753,11 @@ function renderSettings() {
       <div class="setting"><div class="label"><b>Folder</b><span>${esc(p.recordings_dir)}</span></div><button class="btn-line" id="pick-folder">Change</button></div>
       <div class="setting"><div class="label"><b>Keep audio</b><span>Save you.wav and them.wav next to the transcript (about 2 MB per minute).</span></div>${toggle("keep_audio", p.keep_audio)}</div>
     </div>
-    <h2>AI titles</h2>
+    <h2>AI</h2>
     <div class="card">
       <div class="setting"><div class="label"><b>Name calls with AI</b><span>When a call ends, your notes and the transcript are sent to the model below to write a title. Calls you rename yourself are never touched.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
-      <div class="${p.ai_titles ? "" : "dim"}">
+      <div class="setting"><div class="label"><b>Enhanced notes</b><span>When a call ends, turn your notes and the transcript into structured notes: a summary, the topics, decisions and next steps. Your own notes stay untouched.</span></div>${toggle("ai_enhance", p.ai_enhance)}</div>
+      <div class="${p.ai_titles || p.ai_enhance ? "" : "dim"}">
         <div class="setting"><div class="label"><b>API key</b><span>${custom ? "Your own key, stored in %APPDATA%\\minute." : `DeepSeek key from your pi coding agent: ${piState}.`}</span></div>
           <div class="seg" id="key-source"><button data-v="pi" class="${custom ? "" : "on"}">From pi</button><button data-v="custom" class="${custom ? "on" : ""}">Custom</button></div></div>
         ${custom ? `<div class="setting"><div class="label"><b>Key</b></div><input type="password" data-key="ai_key" placeholder="sk-..." value="${esc(p.ai_key)}"></div>` : ""}
@@ -724,7 +777,7 @@ $("settings").addEventListener("change", (e) => {
   if (!el) return;
   const value = el.type === "checkbox" ? el.checked : el.value.trim();
   saveSetting({ [el.dataset.key]: value }).then(() => {
-    if (el.dataset.key === "ai_titles") renderSettings();
+    if (el.dataset.key === "ai_titles" || el.dataset.key === "ai_enhance") renderSettings();
   });
 });
 $("settings").addEventListener("click", async (e) => {
@@ -802,6 +855,17 @@ window.minute = {
     } else if (ev.type === "transcription_off" && ui.live) {
       ui.live.off = ev.reason;
       if (viewingLive()) { renderChips(); if (ui.panelOpen) renderPanel(); }
+    } else if (ev.type === "enhancing") {
+      ui.enhancing.add(ev.call_id);
+      await refreshCall(ev.call_id);
+    } else if (ev.type === "enhanced") {
+      ui.enhancing.delete(ev.call_id);
+      const typing = document.activeElement === $("notes");
+      await refreshCall(ev.call_id);
+      if (!ev.error && ui.view === "note" && ui.call?.id === ev.call_id && !typing && ui.call.enhanced) {
+        ui.noteView = "enhanced";  // the structured notes take over once they're ready
+        renderNote();
+      }
     } else if (ev.type === "engine") {
       ui.engine = { state: ev.state, error: ev.error };
       if (ev.state === "ready") ui.model.ready = true;

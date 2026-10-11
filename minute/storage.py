@@ -6,12 +6,14 @@
     live.jsonl     raw transcript lines as they were committed during the call
     blocks.json    final speaker blocks; transcript.md is the readable copy
     notes.md       your notes
+    enhanced.md    your notes completed and structured by AI (editable)
 
 meta.json status fields:
     status         "recording" | "done"
     transcript     "live" | "done" | "pending"   (pending: audio saved, text still to come)
     transcript_error, title_status ("done" | "pending" | "off"), title_error
     title_source   "default" | "user" | "ai"     (AI titles never overwrite "user")
+    enhanced_status ("done" | "pending"), enhanced_error, enhanced_edited
 """
 import json
 import shutil
@@ -175,6 +177,25 @@ def save_notes(call_id, text):
     (d / "notes.md").write_text(text, encoding="utf-8")
 
 
+def save_enhanced(call_id, text, source="user"):
+    """source "ai" marks a fresh generation; "user" an edit of the enhanced notes."""
+    d = call_dir(call_id)
+    if not (d / "meta.json").exists():
+        return
+    (d / "enhanced.md").write_text(text, encoding="utf-8")
+    meta = read_meta(call_id)
+    meta.update(enhanced_status="done")
+    meta.pop("enhanced_error", None)
+    if source == "user":
+        meta["enhanced_edited"] = True
+    _write_meta(call_id, meta)
+
+
+def enhanced_of(call_id):
+    f = call_dir(call_id) / "enhanced.md"
+    return f.read_text(encoding="utf-8") if f.exists() else ""
+
+
 def notes_of(call_id):
     f = call_dir(call_id) / "notes.md"
     return f.read_text(encoding="utf-8") if f.exists() else ""
@@ -206,7 +227,7 @@ def load_call(call_id):
     else:  # transcript still pending: show what was heard live, if anything
         blocks = merge_blocks(live_lines(call_id))
     return {**read_meta(call_id), "blocks": blocks, "notes": notes_of(call_id),
-            "has_audio": bool(audio_paths(call_id))}
+            "enhanced": enhanced_of(call_id), "has_audio": bool(audio_paths(call_id))}
 
 
 def delete_call(call_id):

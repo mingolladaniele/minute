@@ -14,15 +14,22 @@ The speech model is the GGUF that [Handy](https://handy.computer) already downlo
 
 ## Use
 
-Hit **New note** when a call starts and write your own notes while minute transcribes in the background. The live transcript sits behind the **Transcript** pill at the bottom. While recording, a small pill docks to the right edge of the screen: green bars mean it hears audio, hover it to stop, click it to open minute. Closing the window keeps minute in the tray.
+minute is meant to be forgotten. With **Record calls automatically** on (the default), a note starts by itself when Meet, Zoom, Teams, Slack, WhatsApp or another call app turns on your microphone, and stops 45 seconds after the call app lets go of it. Dictation tools (Handy, Wispr Flow...) never trigger it, and short auto-recordings with nothing in them are dropped. You can also hit **New note** yourself.
 
-When the call ends, minute names it with AI from your notes and the transcript (DeepSeek V4.1 Flash by default, using the key of your pi coding agent). Calls you rename yourself are never touched.
+While recording, a small pill docks to the right edge of the screen: green bars mean it hears audio, hover it to stop, click it to open minute. In the note you write your own notes (Markdown: `- ` lists that continue on Enter, Tab to nest, `#` headings, **bold** with Ctrl+B or `**`), and the live transcript sits behind the **Transcript** pill. The home bar always shows whether the speech model is ready.
 
-Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `transcript.md`, `blocks.json`, `meta.json`, and `you.wav` / `them.wav` if you keep audio.
+When the call ends, minute uses AI (DeepSeek V4.1 Flash by default, with your pi coding agent's key) to:
 
-**Settings**: open at login, call language, recordings folder, keep audio, AI titles (on/off, key from pi or your own, model, endpoint; any OpenAI-compatible API works). They live in `%APPDATA%\minute\settings.json`.
+- write **Enhanced** notes: your notes as the skeleton, completed with what was said, as a summary, topics, decisions and next steps. Switch between **My notes** and **Enhanced**; both are editable.
+- name the call. Calls you rename yourself are never touched.
 
-Use headphones: with speakers, the mic also picks up the other people.
+**Nothing is lost when something fails.** Audio is written to disk as it is recorded, and the raw live text line by line. If the speech model is missing or breaks, the call is kept as audio and transcribed later from it; if the live text comes out empty although people talked, it is redone from the audio too. If the AI API fails (no credits, bad key, outage), the note says why and minute retries every few minutes. Calls cut short by a crash are recovered on the next start.
+
+Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`, `transcript.md`, `blocks.json`, `live.jsonl`, `meta.json`, and `you.wav` / `them.wav` (deleted after a successful transcript if you turn **Keep audio** off).
+
+**Settings**: record calls automatically, open at login, call language, recordings folder, keep audio, AI titles and enhanced notes (key from pi or your own, model, endpoint; any OpenAI-compatible API works). They live in `%APPDATA%\minute\settings.json`.
+
+Use headphones: with speakers, the mic also picks up the other people. Anything else playing on the PC during a call ends up in the transcript too.
 
 ## How it works
 
