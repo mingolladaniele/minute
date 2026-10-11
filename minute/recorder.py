@@ -238,7 +238,7 @@ class Recorder:
         self.call_id = storage.new_call_id(started)
         call_dir = storage.start_call(self.call_id, started, auto=self.auto, app=app)
         pa = pyaudio.PyAudio()
-        loopback, mic = default_devices(pa)
+        loopback, mic = default_devices(pa, prefs["mic"])
         tracks = [
             Track(Source(pa, loopback, "THEM"), WavWriter(call_dir / "them.wav", TARGET_RATE)),
             Track(Source(pa, mic, "YOU"), WavWriter(call_dir / "you.wav", TARGET_RATE)),

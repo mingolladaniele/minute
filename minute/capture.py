@@ -62,8 +62,26 @@ class Source:
         self._stream.close()
 
 
-def default_devices(pa):
-    """(loopback of default speakers, default mic), both WASAPI."""
+def _mics(pa):
+    wasapi = pa.get_host_api_info_by_type(pyaudio.paWASAPI)["index"]
+    for i in range(pa.get_device_count()):
+        dev = pa.get_device_info_by_index(i)
+        if dev["hostApi"] == wasapi and dev["maxInputChannels"] > 0 and not dev.get("isLoopbackDevice"):
+            yield dev
+
+
+def mic_names():
+    """Names of the microphones Windows has right now, for Settings."""
+    pa = pyaudio.PyAudio()
+    try:
+        return [dev["name"] for dev in _mics(pa)]
+    finally:
+        pa.terminate()
+
+
+def default_devices(pa, mic_name=""):
+    """(loopback of default speakers, mic), both WASAPI. The mic is the one named in Settings
+    when it's connected, else Windows' default."""
     wasapi = pa.get_host_api_info_by_type(pyaudio.paWASAPI)
     speakers = pa.get_device_info_by_index(wasapi["defaultOutputDevice"])
     loopback = speakers if speakers.get("isLoopbackDevice") else None
@@ -74,5 +92,7 @@ def default_devices(pa):
                 break
     if loopback is None:
         raise RuntimeError(f"no WASAPI loopback device for {speakers['name']!r}")
-    mic = pa.get_device_info_by_index(wasapi["defaultInputDevice"])
+    mic = next((dev for dev in _mics(pa) if mic_name and dev["name"] == mic_name), None)
+    if mic is None:
+        mic = pa.get_device_info_by_index(wasapi["defaultInputDevice"])
     return loopback, mic

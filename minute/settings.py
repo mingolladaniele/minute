@@ -48,6 +48,7 @@ DEFAULTS = {
     # Speech recognition language. "auto" is the default: in tests it matched a correct fixed language and
     # followed calls that switch language, while a wrong fixed language dropped whole sentences.
     "language": "auto",
+    "mic": "",  # device name; "" is Windows' default mic, also used when the chosen one isn't connected
     "recordings_dir": str(config.DEFAULT_RECORDINGS),
     "keep_audio": True,
     "ai_titles": True,

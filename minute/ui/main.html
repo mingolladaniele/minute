@@ -1008,6 +1008,13 @@ function keyRows(p) {
   return `<div class="setting"><div class="label"><b>API key</b><span>${hint}</span></div>${piChoice}${fromPi ? "" : `<input type="password" data-key="ai_key" placeholder="Paste your key" value="${esc(p.ai_key)}">`}</div>`;
 }
 
+// [value, label]: Windows default first, then the mics connected now; a saved mic that's unplugged stays listed.
+function micOptions(p) {
+  const mics = p.mics || [];
+  const saved = p.mic && !mics.includes(p.mic) ? [[p.mic, `${p.mic} (not connected)`]] : [];
+  return [["", "Windows default"], ...saved, ...mics.map((m) => [m, m])];
+}
+
 function renderSettings() {
   const p = prefs, provider = providerOf(p);
   $("settings").innerHTML = `
@@ -1021,6 +1028,8 @@ function renderSettings() {
     </div>
     <h2>Recordings</h2>
     <div class="card">
+      <div class="setting"><div class="label"><b>Microphone</b><span>What records your voice. Windows default follows the mic set in Windows; a mic you pick is used whenever it's connected.</span></div>
+        <select data-key="mic">${micOptions(p).map(([v, n]) => `<option value="${esc(v)}" ${v === p.mic ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
       <div class="setting"><div class="label"><b>Folder</b><span>${esc(p.recordings_dir)}</span></div><button class="btn-line" id="pick-folder">Change</button></div>
       <div class="setting"><div class="label"><b>Keep audio</b><span>Save you.wav and them.wav next to the transcript (about 2 MB per minute).</span></div>${toggle("keep_audio", p.keep_audio)}</div>
     </div>

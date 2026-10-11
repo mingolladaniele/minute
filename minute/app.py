@@ -11,7 +11,7 @@ import webview
 from PIL import Image
 
 import minute
-from minute import ai, ask, config, model, settings, storage, titles
+from minute import ai, ask, capture, config, model, settings, storage, titles
 from minute.calls import CallWatcher
 from minute.indicator import Indicator
 from minute.recorder import Recorder
@@ -122,6 +122,10 @@ class Api:
         values["pi_key_available"] = settings.pi_key_available()
         values["languages"] = settings.LANGUAGES
         values["windows_language"] = settings.default_language()
+        try:
+            values["mics"] = capture.mic_names()
+        except Exception:  # no audio devices / WASAPI trouble: Settings still opens, with Windows default only
+            values["mics"] = []
         return values
 
     def save_settings(self, values):

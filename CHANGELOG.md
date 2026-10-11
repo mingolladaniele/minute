@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4 (2026-10-11)
+
+- Pick your microphone in Settings > Recordings: Windows default (as before) or a specific mic, used whenever it's connected; if it isn't, minute falls back to the Windows default
+
 ## 0.3.3 (2026-10-11)
 
 - Your name in Settings: Ask now knows that you are the one people call by that name, so "what do I have to do?" finds the tasks given to you by name
