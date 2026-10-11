@@ -16,7 +16,7 @@ The speech model is the GGUF that [Handy](https://handy.computer) already downlo
 
 minute is meant to be forgotten. With **Record calls automatically** on (the default), a note starts by itself when Meet, Zoom, Teams, Slack, WhatsApp or another call app turns on your microphone, and stops 45 seconds after the call app lets go of it. Dictation tools (Handy, Wispr Flow...) never trigger it, and short auto-recordings with nothing in them are dropped. You can also hit **New note** yourself.
 
-While recording, a small pill docks to the right edge of the screen: green bars mean it hears audio, hover it to stop, click it to open minute. In the note you write your own notes (Markdown: `- ` lists that continue on Enter, Tab to nest, `#` headings, **bold** with Ctrl+B or `**`), and the live transcript sits behind the **Transcript** pill. The home bar always shows whether the speech model is ready.
+While recording, a small pill docks to the right edge of the screen: green bars mean it hears audio, hover it to stop, click it to open minute. In the note you write your own notes (Markdown: `- ` lists that continue on Enter, Tab to nest, `#` headings, **bold** with Ctrl+B or `**`), and the live transcript sits behind the **Transcript** pill. The home bar warns you if the speech model isn't ready; when all is well it stays quiet.
 
 When the call ends, minute uses AI (DeepSeek V4.1 Flash by default, with your pi coding agent's key) to:
 
