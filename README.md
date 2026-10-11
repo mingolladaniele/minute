@@ -18,24 +18,32 @@ minute is meant to be forgotten. With **Record calls automatically** on (the def
 
 While recording, a small pill docks to the right edge of the screen: green bars mean it hears audio, hover it to stop, click it to open minute. In the note you write your own notes (Markdown: `- ` lists that continue on Enter, Tab to nest, `#` headings, **bold** with Ctrl+B or `**`), and the live transcript sits behind the **Transcript** pill. The home bar warns you if the speech model isn't ready; when all is well it stays quiet.
 
-When the call ends, minute uses AI (DeepSeek V4.1 Flash by default, with your pi coding agent's key) to:
+When the call ends, minute uses AI to:
 
 - write **Enhanced** notes: your notes as the skeleton, completed with what was said, as a summary, topics, decisions and next steps. Switch between **My notes** and **Enhanced**; both are editable.
 - name the call. Calls you rename yourself are never touched.
+
+Pick the AI in **Settings > AI**, then press **Test**:
+
+- **DeepSeek** (default): DeepSeek V4.1 Flash. Paste a key from [platform.deepseek.com](https://platform.deepseek.com/api_keys). If you use the [pi coding agent](https://github.com/badlogic/pi-mono) logged in to DeepSeek, minute can read its key instead.
+- **Ollama**: a model running on your PC, free and fully offline: nothing leaves your computer. Install [Ollama](https://ollama.com/download), pull a model (`ollama pull qwen3:8b`), enter its name, and raise Ollama's context length to 32k or more so long calls fit.
+- **Other**: any OpenAI-compatible chat API (OpenAI, OpenRouter, Groq, LM Studio...): endpoint, model and key.
+
+Without AI, minute still records, transcribes and keeps your notes.
 
 **Nothing is lost when something fails.** Audio is written to disk as it is recorded, and the raw live text line by line. If the speech model is missing or breaks, the call is kept as audio and transcribed later from it; if the live text comes out empty although people talked, it is redone from the audio too. If the AI API fails (no credits, bad key, outage), the note says why and minute retries every few minutes. Calls cut short by a crash are recovered on the next start.
 
 Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`, `transcript.md`, `blocks.json`, `live.jsonl`, `meta.json`, and `you.wav` / `them.wav` (deleted after a successful transcript if you turn **Keep audio** off).
 
-**Memory**: between calls minute idles at about 300 MB; the speech model (about 1 GB) is loaded when a call starts and freed after 10 minutes without calls.
+**Memory**: between calls minute idles at about 150 MB; the speech model (about 1 GB) is loaded when a call starts and freed after 10 minutes without calls.
 
-**Settings**: record calls automatically, open at login, call language (detected automatically by default; a fixed language only helps if every call is in it), recordings folder, keep audio, AI titles and enhanced notes (key from pi or your own, model, endpoint; any OpenAI-compatible API works). They live in `%APPDATA%\minute\settings.json`.
+**Settings**: record calls automatically, open at login, call language (detected automatically by default; a fixed language only helps if every call is in it), recordings folder, keep audio, AI titles and enhanced notes (provider, key, model). They live in `%APPDATA%\minute\settings.json`.
 
 Use headphones: with speakers, the mic also picks up the other people. Anything else playing on the PC during a call ends up in the transcript too.
 
 ## Try it alone
 
-No call and nobody to call? Double-click `scripts\simulate-call.cmd` (needs ffmpeg). A fake call app holds your microphone for 3 minutes, so minute starts on its own; a recording plays through the speakers as the other people (Handy's recordings by default, or `-Audio path	oile`), and you can talk into your mic and take notes. When it ends, minute stops by itself and writes the title and the enhanced notes. Wear headphones.
+No call and nobody to call? Double-click `scripts\simulate-call.cmd` (needs ffmpeg). A fake call app holds your microphone for 3 minutes, so minute starts on its own; a recording plays through the speakers as the other people (Handy's recordings by default, or `-Audio path\to\file`), and you can talk into your mic and take notes. When it ends, minute stops by itself and writes the title and the enhanced notes. Wear headphones.
 
 ## How it works
 
