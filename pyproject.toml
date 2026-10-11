@@ -1,6 +1,6 @@
 [project]
 name = "minute"
-version = "0.2.1"
+version = "0.2.2"
 description = "Local meeting notes: live transcription of your calls, on your machine."
 requires-python = ">=3.12"
 dependencies = [

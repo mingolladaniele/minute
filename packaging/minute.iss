@@ -2,7 +2,10 @@
 ; Build with scripts\build.ps1.
 
 #define AppName "minute"
-#define AppVersion "0.2.1"
+; AppVersion comes from minute\__init__.py: scripts\build.ps1 passes it as /DAppVersion=...
+#ifndef AppVersion
+  #define AppVersion "0.0.0"
+#endif
 #define AppExe "minute.exe"
 
 [Setup]

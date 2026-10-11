@@ -3,11 +3,13 @@ import ctypes
 import json
 import os
 import threading
+import webbrowser
 
 import pystray
 import webview
 from PIL import Image
 
+import minute
 from minute import config, model, settings, storage, titles
 from minute.calls import CallWatcher
 from minute.indicator import Indicator
@@ -87,6 +89,19 @@ class Api:
 
     def download_model(self):
         self._app.download_model()
+
+    # about
+    def about(self):
+        try:
+            changelog = config.CHANGELOG.read_text(encoding="utf-8")
+        except OSError:
+            changelog = ""
+        return {"version": minute.__version__, "author": minute.AUTHOR, "website": minute.WEBSITE,
+                "repo": minute.REPO, "changelog": changelog}
+
+    def open_url(self, url):
+        if url.startswith(("https://", "http://")):  # links only, never local paths
+            webbrowser.open(url)
 
     # settings
     def get_settings(self):
@@ -222,7 +237,7 @@ class App:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Quit", lambda: self.quit()),
         )
-        self.tray = pystray.Icon("minute", Image.open(config.ICON), "minute", menu)
+        self.tray = pystray.Icon("minute", Image.open(config.ICON), f"minute {minute.__version__}", menu)
         self.tray.run_detached()
 
     def preload(self):
@@ -242,7 +257,7 @@ class App:
 
     def _refresh_tray(self):
         if self.tray:
-            self.tray.title = "minute (recording)" if self.recorder.busy else "minute"
+            self.tray.title = f"minute {minute.__version__}" + (" (recording)" if self.recorder.busy else "")
             self.tray.update_menu()
 
     def quit(self):
