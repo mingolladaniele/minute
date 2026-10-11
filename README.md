@@ -35,7 +35,7 @@ Without AI, minute still records, transcribes and keeps your notes.
 
 **Nothing is lost when something fails.** Audio is written to disk as it is recorded, and the raw live text line by line. If the speech model is missing or breaks, the call is kept as audio and transcribed later from it; if the live text comes out empty although people talked, it is redone from the audio too. If the AI API fails (no credits, bad key, outage), the note says why and minute retries every few minutes. Calls cut short by a crash are recovered on the next start.
 
-Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`, `transcript.md`, `blocks.json`, `live.jsonl`, `meta.json`, and `you.wav` / `them.wav` (deleted after a successful transcript if you turn **Keep audio** off).
+Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`, `transcript.md`, `blocks.json`, `live.jsonl`, `meta.json`, and `you.wav` / `them.wav` (deleted after a successful transcript if you turn **Keep audio** off). Deleting a call (the ... button on its row, or the note menu) moves its folder to the Windows Recycle Bin.
 
 **Memory**: between calls minute idles at about 150 MB; the speech model (about 1 GB) is loaded when a call starts and freed after 10 minutes without calls.
 
