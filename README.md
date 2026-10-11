@@ -33,6 +33,10 @@ Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`
 
 Use headphones: with speakers, the mic also picks up the other people. Anything else playing on the PC during a call ends up in the transcript too.
 
+## Try it alone
+
+No call and nobody to call? Double-click `scripts\simulate-call.cmd` (needs ffmpeg). A fake call app holds your microphone for 3 minutes, so minute starts on its own; a recording plays through the speakers as the other people (Handy's recordings by default, or `-Audio path	oile`), and you can talk into your mic and take notes. When it ends, minute stops by itself and writes the title and the enhanced notes. Wear headphones.
+
 ## How it works
 
 - **Capture**: WASAPI loopback for system output and the default microphone, resampled to 16 kHz mono.
