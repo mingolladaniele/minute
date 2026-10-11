@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 (2026-10-10)
+
+- Much lighter between calls: the speech model is freed after 10 minutes without calls (about 1 GB of RAM) and reloads in a couple of seconds when the next call starts, while its audio is already being recorded
+- Default language follows Windows when the speech model supports it, otherwise English
+- All 32 languages of the speech model are available in Settings
+
 ## 0.2.4 (2026-10-10)
 
 - Less on screen: no call duration, no "Your calls" heading, no timer or Stop in the top bar during a call

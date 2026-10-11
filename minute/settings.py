@@ -1,4 +1,5 @@
 """User settings in %APPDATA%\\minute\\settings.json, plus the Windows integrations they control."""
+import ctypes
 import json
 import os
 import sys
@@ -11,10 +12,38 @@ FILE = config.APP_DATA / "settings.json"
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
 RUN_VALUE = "minute"
 
+# Languages Nemotron Speech Streaming 3.5 transcribes (as reported by the model).
+LANGUAGES = [
+    "en-US", "en-GB", "es-US", "es-ES", "fr-FR", "fr-CA", "it-IT", "pt-BR", "pt-PT", "nl-NL", "de-DE",
+    "tr-TR", "ru-RU", "ar-AR", "hi-IN", "ja-JP", "ko-KR", "vi-VN", "uk-UA", "pl-PL", "sv-SE", "cs-CZ",
+    "nb-NO", "da-DK", "bg-BG", "fi-FI", "hr-HR", "sk-SK", "zh-CN", "hu-HU", "ro-RO", "et-EE",
+]
+
+
+def _windows_language():
+    try:
+        buf = ctypes.create_unicode_buffer(85)
+        langid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+        if ctypes.windll.kernel32.LCIDToLocaleName(langid, buf, 85, 0):
+            return buf.value
+    except (AttributeError, OSError):
+        pass
+    return ""
+
+
+def default_language():
+    """Windows' display language when the model supports it (exactly, or the same language), else English."""
+    win = _windows_language()
+    if win in LANGUAGES:
+        return win
+    base = win.split("-")[0].lower()
+    return next((code for code in LANGUAGES if code.split("-")[0] == base), "en-US")
+
+
 DEFAULTS = {
     "launch_at_startup": False,
     "auto_record": True,  # start a note when a call app takes the mic, stop when the call ends
-    "language": "it-IT",
+    "language": default_language(),  # speech recognition language; "auto" lets the model detect it
     "recordings_dir": str(config.DEFAULT_RECORDINGS),
     "keep_audio": True,
     "ai_titles": True,

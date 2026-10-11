@@ -113,7 +113,10 @@ class Worker:
             storage.set_blocks(call_id, storage.merge_blocks(storage.live_lines(call_id)))
             self.on_event({"type": "call_updated", "call_id": call_id})
             return
-        engine = self.recorder.engine()
+        with self.recorder.holding_engine() as engine:
+            self._transcribe_with(engine, call_id, paths, prefs)
+
+    def _transcribe_with(self, engine, call_id, paths, prefs):
         language = None if prefs["language"] == "auto" else prefs["language"]
         self.on_event({"type": "transcribing", "call_id": call_id})
         timed = []
