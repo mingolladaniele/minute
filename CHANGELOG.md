@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 (2026-10-10)
+
+- Delete a call right from the list: hover it and use the ... button
+- Deleting no longer asks for confirmation and is never final: the call goes to the Windows Recycle Bin, and Undo brings it back for a few seconds
+- Cleaner list: no file icon next to each call
+- Days fold: Today and Yesterday (or the latest day) are open, older days are closed with their number of calls; click a day to open or close it
+- Today and Yesterday move on at midnight even if minute stays open, and days from earlier years show the year
+
 ## 0.3.1 (2026-10-10)
 
 - Ask about your calls finds the right call across languages and synonyms: when not everything fits, the AI first picks the calls to read in full from their notes, instead of matching words. Ask in English about a call held in Italian, or the other way round

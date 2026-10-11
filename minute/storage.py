@@ -15,8 +15,10 @@ meta.json status fields:
     title_source   "default" | "user" | "ai"     (AI titles never overwrite "user")
     enhanced_status ("done" | "pending"), enhanced_error, enhanced_edited
 """
+import ctypes
 import json
 import shutil
+from ctypes import wintypes
 
 from minute import settings, wavfile
 
@@ -253,4 +255,22 @@ def load_call(call_id):
 
 
 def delete_call(call_id):
+    """Gone for good: for auto-recordings that were never a call."""
     shutil.rmtree(call_dir(call_id))
+
+
+class _FileOp(ctypes.Structure):  # SHFILEOPSTRUCTW
+    _fields_ = [("hwnd", wintypes.HWND), ("wFunc", wintypes.UINT), ("pFrom", wintypes.LPCWSTR),
+                ("pTo", wintypes.LPCWSTR), ("fFlags", ctypes.c_ushort), ("fAnyOperationsAborted", wintypes.BOOL),
+                ("hNameMappings", ctypes.c_void_p), ("lpszProgressTitle", wintypes.LPCWSTR)]
+
+
+def recycle_call(call_id):
+    """Move a call's folder to the Windows Recycle Bin, where it can be restored."""
+    FO_DELETE, FOF_SILENT, FOF_NOCONFIRMATION, FOF_ALLOWUNDO, FOF_NOERRORUI = 3, 0x4, 0x10, 0x40, 0x400
+    path = str(call_dir(call_id).resolve())
+    op = _FileOp(wFunc=FO_DELETE, pFrom=path + "\0",  # the list of paths ends with an extra NUL
+                 fFlags=FOF_SILENT | FOF_NOCONFIRMATION | FOF_ALLOWUNDO | FOF_NOERRORUI)
+    code = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+    if code or op.fAnyOperationsAborted or call_dir(call_id).exists():
+        raise OSError(f"could not move the call to the Recycle Bin (code {code})")

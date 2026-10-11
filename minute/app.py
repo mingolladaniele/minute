@@ -49,7 +49,12 @@ class Api:
         self._app.worker.kick()
 
     def delete_call(self, call_id):
-        storage.delete_call(call_id)
+        """To the Recycle Bin, so a wrong click can be undone from Windows too."""
+        try:
+            storage.recycle_call(call_id)
+            return {"ok": True}
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
 
     def open_raw(self, call_id, what):
         """what: "you" / "them" (audio, in the default player), "text" (raw live transcript), "folder"."""
