@@ -39,7 +39,7 @@ user is "you". Every heading and word you write, these included, is in that same
 - Use **bold** only for the few things that matter most.
 
 Never invent anything. If unsure, leave it out. No guesses in brackets, no sentences about what is \
-missing (no decisions means no Decisions section). Leave out small talk. Reply with the Markdown only, \
+missing (no decisions means no Decisions section). Leave out small talk. No em dashes. Reply with the Markdown only, \
 no preamble and no code fences."""
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (2026-10-10)
+
+- Ask anything: type a question in the bar at the bottom. In a note it answers about that call ("what did we agree on the price?"), on the home page about all your calls, with links to the calls it used. Follow-up questions keep the thread; New chat starts over
+- Pick your AI in Settings: DeepSeek (paste a key, or use pi's), Ollama for a free model that runs on your PC with nothing leaving it, or any other OpenAI-compatible API
+- Clearer AI errors: missing key, model or endpoint, and Ollama not running
+- Notes and answers no longer use em dashes
+
 ## 0.2.7 (2026-10-10)
 
 - Fixed: in continuous speech (an interview, a video, someone talking for minutes) the text of the other side only appeared when the call ended, so your replies piled up in one bubble and the transcript came out in the wrong order. Text now appears within about 15 seconds, in the right order
