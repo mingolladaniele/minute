@@ -12,6 +12,7 @@ a = Analysis(
         (str(ROOT / "minute" / "ui"), "minute/ui"),
         (str(ROOT / "assets" / "icon.png"), "assets"),
         (str(ROOT / "assets" / "icon.ico"), "assets"),
+        (str(ROOT / "CHANGELOG.md"), "."),
         (str(ROOT / ENGINE), ENGINE),
     ],
     hiddenimports=["webview.platforms.winforms", "webview.platforms.edgechromium", "clr", "pystray._win32"],

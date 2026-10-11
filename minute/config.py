@@ -12,6 +12,7 @@ LOCAL_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Loca
 UI = RESOURCES / "minute" / "ui"
 ICON = RESOURCES / "assets" / "icon.png"
 ICON_ICO = RESOURCES / "assets" / "icon.ico"
+CHANGELOG = RESOURCES / "CHANGELOG.md"
 DEFAULT_ENGINE = RESOURCES / "vendor" / "transcribe-native-windows-x86_64-cpu-vulkan"
 DEFAULT_RECORDINGS = Path.home() / "Documents" / "minute"
 
