@@ -3,7 +3,7 @@ from minute import ai, settings, storage
 
 MAX_TRANSCRIPT_CHARS = 12000
 SYSTEM = (
-    "You name meeting notes. Read the user's notes and the call transcript, then reply with a short, specific "
+    "You name meeting notes. Read the user's notes (<notes>) and the call transcript (<transcript>), then reply with a short, specific "
     "title of 3 to 7 words that says what the call was about. Write it in the language the call was held in. "
     "No quotes, no trailing punctuation, no dates, no words like 'call' or 'meeting' unless they add meaning. "
     "Reply with the title only."
@@ -22,8 +22,8 @@ def generate(call):
     transcript, notes = ai.transcript_text(call["blocks"], MAX_TRANSCRIPT_CHARS), call.get("notes", "").strip()
     if not transcript and not notes:
         return None
-    reply = ai.chat(SYSTEM, f"My notes:\n{notes or '(none)'}\n\nTranscript:\n{transcript or '(empty)'}",
-                    max_tokens=1500)
+    reply = ai.chat(SYSTEM, ai.notes_and_transcript(notes, transcript), max_tokens=1500,
+                    reasoning="minimal")  # a few words: no need to think long
     return _clean(reply) or None
 
 
