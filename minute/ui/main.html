@@ -167,6 +167,8 @@
   }
   .panel h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; }
   .panel h3 button { color: var(--muted); font-size: 13px; font-weight: 500; }
+  .panel h3 .raw { display: flex; gap: 12px; }
+  .menu .label { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
   .panel h3 button:hover { color: var(--ink); }
   .block { display: grid; grid-template-columns: 58px 1fr; gap: 12px; padding: 7px 0; font-size: 14.5px; }
   .tag { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; padding: 2px 7px; border-radius: 5px; justify-self: start; height: fit-content; margin-top: 2px; }
@@ -281,8 +283,13 @@
   <button data-act="copy-notes">Copy notes</button>
   <button data-act="regen-enhanced">Regenerate enhanced notes</button>
   <button data-act="copy-transcript">Copy transcript</button>
-  <button data-act="folder">Open folder</button>
   <button data-act="retitle">Regenerate title</button>
+  <hr>
+  <div class="label">Raw files</div>
+  <button data-act="raw-them">Play their audio</button>
+  <button data-act="raw-you">Play my audio</button>
+  <button data-act="raw-text">Open raw live text</button>
+  <button data-act="raw-folder">Open folder</button>
   <hr>
   <button data-act="delete" class="danger">Delete</button>
 </div>
@@ -490,6 +497,7 @@ function renderStatus() {
     const doing = ui.transcribing === c.id;
     html = `<div class="grow"><b>${doing ? "Transcribing from the saved audio…" : "Transcript pending"}</b><br>
       ${esc(c.transcript_error || "")}${c.has_audio ? ". The audio is saved: minute transcribes it on its own as soon as it can." : ""}</div>
+      ${c.audio?.length ? `<button class="btn-line" data-raw="folder">Open audio</button>` : ""}
       ${doing ? "" : `<button class="btn-line" data-retry="${c.id}">Retry now</button>`}`;
   } else if (c && c.enhanced_status === "pending" && c.enhanced_error && !ui.enhancing.has(c.id)) {
     html = `<div class="grow"><b>Enhanced notes not generated yet</b><br>${esc(c.enhanced_error)}. Your notes and the transcript are safe; minute retries every few minutes.</div>
@@ -582,6 +590,9 @@ $("title").addEventListener("keydown", (e) => {
 /* --- menu --- */
 $("more").addEventListener("click", (e) => {
   e.stopPropagation();
+  const audio = ui.call?.audio || [];
+  $("menu").querySelector('[data-act="raw-them"]').classList.toggle("hidden", !audio.includes("them"));
+  $("menu").querySelector('[data-act="raw-you"]').classList.toggle("hidden", !audio.includes("you"));
   $("menu").classList.toggle("hidden");
 });
 document.addEventListener("click", (e) => {
@@ -605,8 +616,8 @@ $("menu").addEventListener("click", async (e) => {
   } else if (act === "copy-transcript") {
     await navigator.clipboard.writeText(c.blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
     toast("Transcript copied");
-  } else if (act === "folder") {
-    api().open_folder(c.id);
+  } else if (act.startsWith("raw-")) {
+    api().open_raw(c.id, act.slice(4));
   } else if (act === "retitle") {
     api().retitle(c.id);
   } else if (act === "delete") {
@@ -649,7 +660,11 @@ function renderPanel() {
   const empty = live
     ? (ui.live.off ? `Live text is unavailable (${esc(ui.live.off)}). The audio is being saved and will be transcribed later.` : "Listening. Text appears here as people speak.")
     : (ui.call?.transcript === "pending" ? "The transcript isn't ready yet." : "Nothing was transcribed.");
-  p.innerHTML = `<h3>Transcript ${live ? "" : `<button id="copy-tr">Copy</button>`}</h3>${body || `<p class="ghost">${empty}</p>`}`;
+  const raw = live ? "" : `<span class="raw">
+      ${(ui.call?.audio || []).map((t) => `<button data-raw="${t}">${t === "them" ? "Their audio" : "My audio"}</button>`).join("")}
+      <button data-raw="text">Raw text</button><button data-raw="folder">Folder</button>
+      <button id="copy-tr">Copy</button></span>`;
+  p.innerHTML = `<h3>Transcript ${raw}</h3>${body || `<p class="ghost">${empty}</p>`}`;
   if (live && atBottom) p.scrollTop = p.scrollHeight;
   $("copy-tr")?.addEventListener("click", async () => {
     await navigator.clipboard.writeText(blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
@@ -797,6 +812,11 @@ $("settings").addEventListener("click", async (e) => {
     const r = await api().test_ai();
     $("ai-test").innerHTML = r.ok ? `<span class="ok">Works.</span> Title: “${esc(r.title || "")}”` : `<span class="bad">${esc(r.error)}</span>`;
   }
+});
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-raw]");
+  if (b && ui.call) api().open_raw(ui.call.id, b.dataset.raw);
 });
 
 /* --- events from Python --- */
