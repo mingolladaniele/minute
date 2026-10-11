@@ -11,12 +11,13 @@ The Recorder runs on a background thread and reports through on_event(dict):
     {"type": "levels", "elapsed": seconds, "YOU": 0..1, "THEM": 0..1}
     {"type": "transcription_off", "reason": str}     live text unavailable, audio still recording
     {"type": "model_missing"}
-    {"type": "engine", "state": "loading|ready|missing|error", "error": str|None}
+    {"type": "engine", "state": "unloaded|loading|ready|missing|error", "error": str|None}
     {"type": "saved" | "discarded", "call_id": ...}
 """
 import json
 import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime
 
 import numpy as np
@@ -109,8 +110,10 @@ class Recorder:
         self.auto = False
         self.engine_lock = threading.Lock()  # transcribe.cpp 0.x: one compute at a time per model
         self._engine = None
-        self.engine_state = "unloaded"  # loading | ready | missing | error
+        self.engine_state = "unloaded"  # unloaded | loading | ready | missing | error
         self.engine_error = None
+        self._engine_holders = 0  # background users (the worker) keeping the model across lock releases
+        self._engine_used = time.monotonic()
         self._stop = threading.Event()
         self._thread = None
 
@@ -141,7 +144,40 @@ class Recorder:
                     self._engine_event("error", str(e))
                     raise
                 self._engine_event("ready")
+            self._engine_used = time.monotonic()
             return self._engine
+
+    @contextmanager
+    def holding_engine(self):
+        """The model, guaranteed to stay loaded until the block ends (for work spanning many lock releases)."""
+        with self.engine_lock:
+            self._engine_holders += 1
+        try:
+            yield self.engine()
+        finally:
+            with self.engine_lock:
+                self._engine_holders -= 1
+                self._engine_used = time.monotonic()
+
+    def unload_if_idle(self, after):
+        """Free the model (about 1 GB of RAM) once nothing has used it for `after` seconds.
+        The next call reloads it while its audio is already being captured, so nothing is lost."""
+        if self.busy or self._engine is None or time.monotonic() - self._engine_used < after:
+            return False
+        if not self.engine_lock.acquire(blocking=False):
+            return False
+        try:
+            if self.busy or self._engine_holders:
+                return False
+            old, self._engine = self._engine, None
+        finally:
+            self.engine_lock.release()
+        try:
+            old.close()
+        except Exception:
+            pass
+        self._engine_event("unloaded")
+        return True
 
     def reset_engine(self, error):
         """Drop a model that failed mid-use (e.g. the GPU context was lost across sleep); the next use reloads it."""
@@ -290,6 +326,7 @@ class Recorder:
                             engine.free_stream(tr.stream)
                         except Exception:
                             pass  # engine already reset after a failure
+            self._engine_used = time.monotonic()
             duration = time.perf_counter() - start
             heard = "".join(text for _, _, text in lines).strip()
             if live and len(heard) < 10 and max(tr.voiced for tr in tracks) > EMPTY_LIVE_SPEECH:

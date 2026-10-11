@@ -27,7 +27,9 @@ When the call ends, minute uses AI (DeepSeek V4.1 Flash by default, with your pi
 
 Each call is saved to `Documents\minute\<timestamp>\`: `notes.md`, `enhanced.md`, `transcript.md`, `blocks.json`, `live.jsonl`, `meta.json`, and `you.wav` / `them.wav` (deleted after a successful transcript if you turn **Keep audio** off).
 
-**Settings**: record calls automatically, open at login, call language, recordings folder, keep audio, AI titles and enhanced notes (key from pi or your own, model, endpoint; any OpenAI-compatible API works). They live in `%APPDATA%\minute\settings.json`.
+**Memory**: between calls minute idles at about 300 MB; the speech model (about 1 GB) is loaded when a call starts and freed after 10 minutes without calls.
+
+**Settings**: record calls automatically, open at login, call language (defaults to Windows' language, or English), recordings folder, keep audio, AI titles and enhanced notes (key from pi or your own, model, endpoint; any OpenAI-compatible API works). They live in `%APPDATA%\minute\settings.json`.
 
 Use headphones: with speakers, the mic also picks up the other people. Anything else playing on the PC during a call ends up in the transcript too.
 

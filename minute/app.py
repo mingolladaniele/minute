@@ -3,6 +3,7 @@ import ctypes
 import json
 import os
 import threading
+import time
 import webbrowser
 
 import pystray
@@ -17,6 +18,7 @@ from minute.recorder import Recorder
 from minute.worker import Worker
 
 MUTEX_NAME = "Local\\minute-single-instance"
+UNLOAD_AFTER = float(os.environ.get("MINUTE_UNLOAD_AFTER", 600))  # seconds without calls before the model is freed
 ERROR_ALREADY_EXISTS = 183
 
 
@@ -113,6 +115,7 @@ class Api:
         values = settings.load()
         values["ai_key"] = "•" * 8 if values["ai_key"] else ""  # never send the key back to the page
         values["pi_key_available"] = settings.pi_key_available()
+        values["languages"] = settings.LANGUAGES
         return values
 
     def save_settings(self, values):
@@ -216,7 +219,6 @@ class App:
             try:
                 model.download(progress)
                 self._emit({"type": "download_done"})
-                self.preload()
                 self.worker.kick()  # transcribe what was recorded as audio only
             except Exception as e:
                 self._emit({"type": "download_error", "message": str(e)})
@@ -257,14 +259,12 @@ class App:
         self.tray = pystray.Icon("minute", Image.open(config.ICON), f"minute {minute.__version__}", menu)
         self.tray.run_detached()
 
-    def preload(self):
-        """Load the speech model in the background so it's ready before the next call starts."""
-        def work():
-            try:
-                self.recorder.engine()
-            except Exception:
-                pass  # state and reason already reported through the "engine" event
-        threading.Thread(target=work, name="minute-preload", daemon=True).start()
+    def _unload_when_idle(self):
+        # The model is loaded at the start of each call (audio is captured meanwhile) and freed
+        # after UNLOAD_AFTER without calls: minute idles at a fraction of the memory.
+        while not self.quitting:
+            time.sleep(min(60, UNLOAD_AFTER / 2))
+            self.recorder.unload_if_idle(UNLOAD_AFTER)
 
     def _notify(self, message):
         try:
@@ -298,7 +298,7 @@ class App:
         self.indicator = Indicator(on_click=self.show_main, on_stop=lambda: self.stop("pill"))
         self._build_tray()
         storage.recover_interrupted()  # calls cut short by a crash or power loss
-        self.preload()
+        threading.Thread(target=self._unload_when_idle, name="minute-unload", daemon=True).start()
         self.worker = Worker(self.recorder, self._emit)
         self.watcher = CallWatcher(self.recorder, start=self.auto_start, stop=self._auto_stop,
                                    enabled=lambda: settings.load()["auto_record"], ending=self.on_call_ending)
