@@ -4,11 +4,25 @@ One Engine loads the GGUF model once; each Stream is an independent
 streaming session on that model. transcribe.cpp 0.x does not support
 concurrent compute, so all Streams of an Engine must be fed from the
 same thread.
+
+Nemotron streaming only commits text at an end-of-utterance it detects, which
+can take minutes in continuous speech (an interview, a video) or never come.
+Stream therefore closes the utterance itself at pauses: finalize, keep the
+text, begin again on the same session. Committed text stays append-only.
 """
 import ctypes as C
 import os
+import re
 
 import numpy as np
+
+RATE = 16000
+QUIET_RMS = 0.01  # a 100 ms window quieter than this is a pause
+PAUSE = 0.7  # seconds of quiet that end an utterance...
+MIN_SEGMENT = 3.0  # ...once it is this long (shorter cuts confuse language detection)
+SOFT_MAX = 10.0  # past this, end at the next short breath
+HARD_MAX = 20.0  # past this, end anyway
+LANGUAGE_TAG = re.compile(r"\s*<[a-z]{2,3}(?:-[A-Z]{2})?>")  # e.g. <sl-SI>, leaked on short noisy utterances
 
 
 class _StreamUpdate(C.Structure):
@@ -73,6 +87,7 @@ def _load_lib(dll_dir):
     lib.transcribe_stream_feed.argtypes = [vp, P(C.c_float), C.c_int, P(_StreamUpdate)]
     lib.transcribe_stream_finalize.argtypes = [vp, P(_StreamUpdate)]
     lib.transcribe_stream_get_text.argtypes = [vp, P(_StreamText)]
+    lib.transcribe_stream_reset.argtypes = [vp]
     return lib
 
 
@@ -116,11 +131,37 @@ class Stream:
         self._lib = engine._lib
         self._session = C.c_void_p()
         engine._check(self._lib.transcribe_session_init(engine._model, None, C.byref(self._session)), "session_init")
-        params = _RunParams()
-        self._lib.transcribe_run_params_init(C.byref(params))
+        self._params = _RunParams()
+        self._lib.transcribe_run_params_init(C.byref(self._params))
         if language:
-            params.language = language.encode()
-        engine._check(self._lib.transcribe_stream_begin(self._session, C.byref(params), None), "stream_begin")
+            self._language = language.encode()  # kept alive for every begin
+            self._params.language = self._language
+        self._done = ""  # text of the utterances already closed
+        self._segment = 0.0  # seconds fed since the current utterance began
+        self._quiet = 0.0  # seconds of trailing quiet
+        self._begin()
+
+    def _begin(self):
+        self._e._check(self._lib.transcribe_stream_begin(self._session, C.byref(self._params), None), "stream_begin")
+        self._segment = 0.0
+
+    def _raw_text(self):
+        t = _StreamText()
+        self._lib.transcribe_stream_text_init(C.byref(t))
+        self._lib.transcribe_stream_get_text(self._session, C.byref(t))
+        dec = lambda b: (b or b"").decode("utf-8", "replace")
+        return dec(t.committed_text), dec(t.tentative_text)
+
+    def _finalize_raw(self):
+        upd = _StreamUpdate()
+        self._lib.transcribe_stream_update_init(C.byref(upd))
+        self._e._check(self._lib.transcribe_stream_finalize(self._session, C.byref(upd)), "stream_finalize")
+
+    def _join(self, text):
+        text = LANGUAGE_TAG.sub("", text).strip()
+        if not text:
+            return self._done
+        return f"{self._done} {text}" if self._done else text
 
     def feed(self, pcm):
         pcm = np.ascontiguousarray(pcm, dtype=np.float32)
@@ -128,20 +169,37 @@ class Stream:
         self._lib.transcribe_stream_update_init(C.byref(upd))
         ptr = pcm.ctypes.data_as(C.POINTER(C.c_float))
         self._e._check(self._lib.transcribe_stream_feed(self._session, ptr, len(pcm), C.byref(upd)), "stream_feed")
-        return upd.committed_changed
+        step = RATE // 10
+        for i in range(0, len(pcm), step):
+            w = pcm[i:i + step]
+            self._quiet = self._quiet + len(w) / RATE if float(np.sqrt(np.mean(w * w))) < QUIET_RMS else 0.0
+        self._segment += len(pcm) / RATE
+        self._maybe_close()
+
+    def _maybe_close(self):
+        seg, quiet = self._segment, self._quiet
+        if not ((quiet >= PAUSE and seg >= MIN_SEGMENT) or (seg >= SOFT_MAX and quiet >= 0.1) or seg >= HARD_MAX):
+            return
+        committed, tentative = self._raw_text()
+        if not (committed.strip() or tentative.strip()):
+            self._segment = 0.0 if quiet >= PAUSE else self._segment  # silence: nothing to close
+            if seg >= HARD_MAX:
+                self._lib.transcribe_stream_reset(self._session)
+                self._begin()
+            return
+        self._finalize_raw()
+        self._done = self._join(self._raw_text()[0])
+        self._begin()
 
     def finalize(self):
-        upd = _StreamUpdate()
-        self._lib.transcribe_stream_update_init(C.byref(upd))
-        self._e._check(self._lib.transcribe_stream_finalize(self._session, C.byref(upd)), "stream_finalize")
+        self._finalize_raw()
+        self._done = self._join(self._raw_text()[0])
+        self._lib.transcribe_stream_reset(self._session)
 
     def text(self):
-        """(committed, tentative), copied out; pointers die on the next feed."""
-        t = _StreamText()
-        self._lib.transcribe_stream_text_init(C.byref(t))
-        self._lib.transcribe_stream_get_text(self._session, C.byref(t))
-        dec = lambda b: (b or b"").decode("utf-8", "replace")
-        return dec(t.committed_text), dec(t.tentative_text)
+        """(committed, tentative), copied out; committed only ever grows."""
+        committed, tentative = self._raw_text()
+        return self._join(committed), tentative
 
     def free(self):
         if self._session:

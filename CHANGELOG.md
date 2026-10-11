@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.7 (2026-10-10)
+
+- Fixed: in continuous speech (an interview, a video, someone talking for minutes) the text of the other side only appeared when the call ended, so your replies piled up in one bubble and the transcript came out in the wrong order. Text now appears within about 15 seconds, in the right order
+- Fixed: a language tag such as <sl-SI> could show up in the transcript
+
 ## 0.2.6 (2026-10-10)
 
 - Language detection is now the default and the recommended setting: it handles any language and calls that switch language, while a wrong fixed language could drop whole sentences
