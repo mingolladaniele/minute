@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 (2026-10-11)
+
+- Your name in Settings: Ask now knows that you are the one people call by that name, so "what do I have to do?" finds the tasks given to you by name
+- Next steps no longer make up an owner: a task with no named owner is listed without one, never given to "them" or to whoever spoke
+- Short calls get a few lines instead of sections, and notes never say what wasn't decided or discussed
+- Ideas and proposals stay ideas: only what the call actually settled is written as a decision
+- Dates like "tomorrow" or "next Wednesday" are read from the day of the call, also when notes are regenerated later
+- With a model on your PC, long transcripts are cut in the middle: Ask now says when an answer may be in the part left out instead of saying it wasn't discussed
+
 ## 0.3.2 (2026-10-10)
 
 - Delete a call right from the list: hover it and use the ... button

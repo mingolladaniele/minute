@@ -31,13 +31,28 @@ def _http_reason(e):
     return f"{reason} ({detail[:120]})" if detail else reason
 
 
+CUT = "[... part of the call left out here for length ...]"  # says what it is, so the model doesn't take it as silence
+
+
 def transcript_text(blocks, limit):
     """Speaker-tagged transcript, trimmed from the middle so both the opening and the wrap-up survive."""
     text = "\n".join(f"{b['label']} [{b['t']}]: {b['text']}" for b in blocks if b["text"])
     if len(text) <= limit:
         return text
     half = limit // 2
-    return f"{text[:half]}\n[...]\n{text[-half:]}"
+    return f"{text[:half]}\n{CUT}\n{text[-half:]}"
+
+
+def notes_and_transcript(notes, transcript):
+    """The user's notes and the transcript, each in its own tags. An empty one is left out rather than marked
+    "(none)": a placeholder invites the model to write that something is missing."""
+    parts = [f"<notes>\n{notes}\n</notes>" if notes else "", f"<transcript>\n{transcript}\n</transcript>" if transcript else ""]
+    return "\n\n".join(p for p in parts if p)
+
+
+def user_name():
+    """Who YOU is, from Settings; empty when the user hasn't said."""
+    return settings.load()["user_name"].strip()
 
 
 def chat(system, user, max_tokens, timeout=60, history=(), json_mode=False, reasoning="low"):

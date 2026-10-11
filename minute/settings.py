@@ -52,6 +52,7 @@ DEFAULTS = {
     "keep_audio": True,
     "ai_titles": True,
     "ai_enhance": True,  # write enhanced.md (structured notes) when a call ends
+    "user_name": "",  # who YOU is, so the AI knows that someone saying this name is talking to the user
     "ai_base_url": "https://api.deepseek.com",
     "ai_model": "deepseek-flash",
     # "pi": the DeepSeek key of the pi coding agent, read from ~/.pi/agent/auth.json at call time;

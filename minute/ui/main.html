@@ -1028,6 +1028,7 @@ function renderSettings() {
     <div class="card">
       <div class="setting"><div class="label"><b>Name calls with AI</b><span>When a call ends, your notes and the transcript are sent to the model below to write a title. Calls you rename yourself are never touched.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
       <div class="setting"><div class="label"><b>Enhanced notes</b><span>When a call ends, turn your notes and the transcript into structured notes: a summary, the topics, decisions and next steps. Your own notes stay untouched.</span></div>${toggle("ai_enhance", p.ai_enhance)}</div>
+      <div class="setting"><div class="label"><b>Your name</b><span>So the AI knows that YOU in the transcript is you, and that someone saying this name is talking to you.</span></div><input type="text" data-key="user_name" placeholder="e.g. Daniele" value="${esc(p.user_name || "")}"></div>
       <div class="${p.ai_titles || p.ai_enhance ? "" : "dim"}">
         <div class="setting"><div class="label"><b>Provider</b><span>${providerHint(provider)}</span></div>
           <div class="seg" id="provider">${PROVIDERS.map(([v, n]) => `<button data-v="${v}" class="${v === provider ? "on" : ""}">${n}</button>`).join("")}</div></div>
