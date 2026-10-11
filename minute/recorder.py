@@ -120,7 +120,7 @@ class Recorder:
 
     def _set_state(self, state):
         self.state = state
-        self.on_event({"type": "state", "state": state, "call_id": self.call_id})
+        self.on_event({"type": "state", "state": state, "call_id": self.call_id, "auto": self.auto})
 
     def _engine_event(self, state, error=None):
         self.engine_state, self.engine_error = state, error

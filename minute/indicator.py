@@ -23,6 +23,7 @@ EDGE_MARGIN = 10
 PILL = (29, 29, 32, 240)
 BORDER = (255, 255, 255, 38)
 BARS = (91, 209, 110, 255)
+ENDING = (224, 164, 58, 255)  # amber: the call app let go of the mic, auto-stop is counting down
 STOP_BG = (229, 72, 77, 255)
 IDLE_ALPHA, HOVER_ALPHA = 165, 255
 SS = 4  # supersampling factor for smooth edges
@@ -103,6 +104,7 @@ class Indicator:
         self.on_click = on_click
         self.on_stop = on_stop
         self.level = 0.0
+        self.ending = False
         self.hover = False
         self.visible = False
         self.hwnd = None
@@ -121,6 +123,11 @@ class Indicator:
 
     def set_level(self, level):
         self.level = max(0.0, min(1.0, level))
+        if self.visible:
+            self._post(MSG_RENDER)
+
+    def set_ending(self, ending):
+        self.ending = bool(ending)
         if self.visible:
             self._post(MSG_RENDER)
 
@@ -165,6 +172,7 @@ class Indicator:
             return 0
         if msg == MSG_HIDE:
             self.visible = False
+            self.ending = False
             user32.ShowWindow(hwnd, SW_HIDE)
             return 0
         if msg == MSG_RENDER:
@@ -230,10 +238,12 @@ class Indicator:
             d.rounded_rectangle((cx - q, cy - q, cx + q, cy + q), radius=SS * 2, fill=(255, 255, 255, 255))
         else:
             bw, gap = round(2.5 * self.scale * SS), round(2.5 * self.scale * SS)
+            level = 0.25 if self.ending else min(1.0, self.level * 1.6)  # ending: still, low, amber
             for i, shape in enumerate((0.65, 1.0, 0.8)):
-                h = round((3 + 11 * min(1.0, self.level * 1.6) * shape) * self.scale * SS)
+                h = round((3 + 11 * level * shape) * self.scale * SS)
                 x = cx + (i - 1) * (bw + gap) - bw // 2
-                d.rounded_rectangle((x, cy - h // 2, x + bw, cy + h // 2), radius=bw // 2, fill=BARS)
+                d.rounded_rectangle((x, cy - h // 2, x + bw, cy + h // 2), radius=bw // 2,
+                                    fill=ENDING if self.ending else BARS)
         im = im.resize((self.w, self.h), Image.LANCZOS)
         im.alpha_composite(self.logo, ((self.w - self.logo.width) // 2, round(self.h * 0.14)))
         return im

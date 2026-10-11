@@ -63,7 +63,7 @@
     display: flex; align-items: center; height: 36px; padding: 0 4px;
     border: 1px solid var(--line); border-radius: 999px; background: var(--chip);
   }
-  .navpill button { width: 32px; height: 28px; display: grid; place-items: center; border-radius: 999px; color: var(--muted); }
+  .navpill button { height: 28px; padding: 0 12px 0 8px; display: flex; align-items: center; gap: 4px; border-radius: 999px; color: var(--muted); font-size: 13.5px; font-weight: 500; }
   .navpill button:hover { background: var(--hover); color: var(--ink); }
   .right { display: flex; align-items: center; gap: 8px; }
   .btn-dark {
@@ -240,6 +240,10 @@
   .status .btn-line { height: 30px; font-size: 13px; }
   .row .flag { color: var(--faint); font-size: 12px; margin-left: 10px; font-weight: 500; }
   .chip.audio-only { color: var(--muted); }
+  .chip.ending { color: var(--ink); }
+  .chip.ending i { width: 7px; height: 7px; border-radius: 50%; background: #e0a43a; }
+  .chip.keep { cursor: pointer; color: var(--ink); font-weight: 500; }
+  .chip.keep:hover { background: var(--hover); }
   .chip.audio-only i { background: var(--faint); }
 
   .engine {
@@ -284,8 +288,7 @@
 <div class="topbar">
   <div class="brand" id="brand"><img src="icon.png" alt="">minute<span class="engine" id="engine"><i></i><span></span></span></div>
   <div class="navpill hidden" id="nav">
-    <button id="back" title="Back"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
-    <button id="home-btn" title="Home"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5v-4h-4v4H2.5z"/></svg></button>
+    <button id="back" title="Back to your calls"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg><span>Calls</span></button>
   </div>
   <div class="right">
     <span class="chip rec hidden" id="rec-chip"><i></i><span id="rec-time">00:00</span></span>
@@ -403,7 +406,6 @@ $("primary").addEventListener("click", () => {
   else if (ui.state === "recording") api().stop();
 });
 $("back").addEventListener("click", () => showHome());
-$("home-btn").addEventListener("click", () => showHome());
 $("gear").addEventListener("click", () => showSettings());
 
 /* --- home --- */
@@ -546,10 +548,20 @@ function renderChips() {
     $("chips").innerHTML = `<span class="chip">${ICON_CAL}${day(c.started)} ${hhmm(c.started)}</span>
       <span class="chip">${ICON_CLOCK}${duration(c.duration)}</span>`;
   } else if (ui.live) {
-    const off = ui.live.off;
+    const off = ui.live.off, ending = ui.live.ending;
     $("chips").innerHTML = `<span class="chip">${ICON_CAL}Today ${hhmm(new Date().toISOString())}</span>
-      <span class="chip rec"><i></i>${ui.state === "loading" ? "Starting" : "Recording"}</span>
+      ${ending != null
+        ? `<span class="chip ending" title="The call app let go of the microphone"><i></i>Call ended · stopping in ${ending}s</span>
+           <button class="chip keep" id="keep-recording">Keep recording</button>`
+        : `<span class="chip rec"><i></i>${ui.state === "loading" ? "Starting" : "Recording"}${ui.live.auto ? " · stops when the call ends" : ""}</span>`}
       ${off ? `<span class="chip audio-only" title="${esc(off)}"><i></i>Audio only, transcript later</span>` : ""}`;
+    $("keep-recording")?.addEventListener("click", () => {
+      api().keep_recording();
+      ui.live.auto = false;
+      ui.live.ending = null;
+      renderChips();
+      toast("Recording until you stop it");
+    });
   }
 }
 
@@ -878,7 +890,7 @@ window.minute = {
       const prev = ui.state;
       ui.state = ev.state;
       if (ev.state === "loading" && prev === "idle") {
-        ui.live = { id: null, blocks: [], tentative: {}, elapsed: 0, title: "", notes: "" };
+        ui.live = { id: null, blocks: [], tentative: {}, elapsed: 0, title: "", notes: "", auto: !!ev.auto, ending: null };
         openLive();
         editor.focus();
       }
@@ -927,6 +939,9 @@ window.minute = {
     } else if (ev.type === "transcription_off" && ui.live) {
       ui.live.off = ev.reason;
       if (viewingLive()) { renderChips(); if (ui.panelOpen) renderPanel(); }
+    } else if (ev.type === "call_ending" && ui.live) {
+      ui.live.ending = ev.seconds;
+      if (viewingLive()) renderChips();
     } else if (ev.type === "enhancing") {
       ui.enhancing.add(ev.call_id);
       await refreshCall(ev.call_id);

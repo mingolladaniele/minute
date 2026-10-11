@@ -87,6 +87,11 @@ class Api:
     def stop(self):
         self._app.stop()
 
+    def keep_recording(self):
+        """Cancel the auto-stop countdown: from now on this note only stops when the user stops it."""
+        self._app.recorder.auto = False
+        self._app.on_call_ending(None)
+
     def download_model(self):
         self._app.download_model()
 
@@ -143,6 +148,7 @@ class App:
         self.tray = None
         self.worker = None
         self.watcher = None
+        self._auto_stopping = False
 
     # --- recording -------------------------------------------------------
     def start(self):
@@ -159,6 +165,14 @@ class App:
             self.watcher.user_stopped()
         self.recorder.stop(source)
 
+    def on_call_ending(self, seconds):
+        self.indicator.set_ending(seconds is not None)
+        self._emit({"type": "call_ending", "seconds": seconds})
+
+    def _auto_stop(self):
+        self._auto_stopping = True
+        self.recorder.stop("call ended")
+
     def toggle(self):
         self.stop("tray") if self.recorder.busy else self.start()
 
@@ -174,9 +188,12 @@ class App:
                 self.indicator.show()
             elif ev["state"] == "idle":
                 self.indicator.hide()
+                self._auto_stopping = False
             self._refresh_tray()
         elif ev["type"] == "saved":
             self.worker.kick()  # transcript catch-up, AI title, audio cleanup
+            if self._auto_stopping:
+                self._notify("Call ended. Your notes are saved; enhanced notes are on the way.")
         elif ev["type"] == "model_missing" and not self.recorder.auto:
             self.show_main()
         elif ev["type"] == "model_missing":
@@ -283,8 +300,8 @@ class App:
         storage.recover_interrupted()  # calls cut short by a crash or power loss
         self.preload()
         self.worker = Worker(self.recorder, self._emit)
-        self.watcher = CallWatcher(self.recorder, start=self.auto_start, stop=lambda: self.recorder.stop("call ended"),
-                                   enabled=lambda: settings.load()["auto_record"])
+        self.watcher = CallWatcher(self.recorder, start=self.auto_start, stop=self._auto_stop,
+                                   enabled=lambda: settings.load()["auto_record"], ending=self.on_call_ending)
         webview.start(icon=str(config.ICON_ICO))
 
 

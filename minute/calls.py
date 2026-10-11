@@ -4,6 +4,7 @@ HKCU\\...\\CapabilityAccessManager\\ConsentStore\\microphone keeps, per app, the
 opened and closed the mic; LastUsedTimeStop == 0 means "in use now". Only known call apps
 count, so dictation tools (Handy, Wispr Flow...), recorders and minute itself never start a note.
 """
+import math
 import threading
 import time
 import winreg
@@ -75,11 +76,13 @@ class CallWatcher:
     POLL = 2.0
     END_GRACE = 45.0  # muting or a short drop doesn't end the note
 
-    def __init__(self, recorder, start, stop, enabled):
+    def __init__(self, recorder, start, stop, enabled, ending=lambda seconds: None):
         self.recorder = recorder
         self.start = start      # start(app_name)
         self.stop = stop        # stop()
         self.enabled = enabled  # () -> bool, read every poll so the setting applies at once
+        self.ending = ending    # ending(seconds left before the auto-stop, or None when the call is on again)
+        self._ending = None
         self.apps = set()
         self._last_seen = 0.0
         self._suppressed = False
@@ -106,7 +109,13 @@ class CallWatcher:
         elif self._suppressed:
             self._suppressed = False
         rec = self.recorder
+        left = None
+        if rec.busy and rec.auto and not self.apps:
+            left = max(0, math.ceil(self.END_GRACE - (now - self._last_seen)))
+        if left != self._ending:
+            self._ending = left
+            self.ending(left)
         if self.apps and not rec.busy and not self._suppressed and self.enabled():
             self.start(sorted(self.apps)[0])
-        elif rec.busy and rec.auto and not self.apps and now - self._last_seen > self.END_GRACE:
+        elif left == 0:
             self.stop()
