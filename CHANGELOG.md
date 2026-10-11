@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 (2026-10-10)
+
+- Less on screen: no call duration, no "Your calls" heading, no timer or Stop in the top bar during a call
+- One recording control at the bottom of the note: transcript and stop together
+- The speech model status only appears when something is wrong
+- Transcript reads like a conversation: them on the left, you on the right, a time marker at most once a minute
+
 ## 0.2.3 (2026-10-10)
 
 - The auto-stop is visible: when the call app lets go of the mic the pill turns amber and the note shows "Call ended · stopping in 32s"
