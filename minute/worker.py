@@ -1,7 +1,7 @@
 """Background catch-up: nothing a failure leaves behind is lost, it is redone later.
 
 - calls whose transcript is "pending" (model missing or broken, crash) are transcribed from their WAVs
-- calls still waiting for an AI title (API down, no credits, no key) are titled
+- calls still waiting for enhanced notes or an AI title (API down, no credits, no key) get them
 - with "Keep audio" off, WAVs are deleted only once their transcript is safely done
 
 Runs at startup, after every call, when asked (kick) and every RETRY_EVERY seconds.
@@ -9,7 +9,7 @@ Steps back as soon as a recording starts: the model can only compute one thing a
 """
 import threading
 
-from minute import settings, storage, titles, wavfile
+from minute import enhance, settings, storage, titles, wavfile
 from minute.capture import TARGET_RATE
 from minute.recorder import ModelMissing
 
@@ -72,6 +72,8 @@ class Worker:
             call = storage.read_meta(call_id)
             if call.get("transcript") == "done" and not prefs["keep_audio"] and storage.audio_paths(call_id):
                 storage.delete_audio(call_id)
+            if self._needs_enhance(call, prefs):
+                self._enhance(call_id)
             if self._needs_title(call, prefs):
                 self._title(call_id)
 
@@ -79,6 +81,20 @@ class Worker:
     def _needs_title(call, prefs):
         return (prefs["ai_titles"] and call.get("title_source", "default") == "default"
                 and call.get("title_status") != "done" and call.get("transcript", "done") == "done")
+
+    @staticmethod
+    def _needs_enhance(call, prefs):
+        return (prefs["ai_enhance"] and call.get("enhanced_status") != "done"
+                and call.get("transcript", "done") == "done")
+
+    def _enhance(self, call_id):
+        self.on_event({"type": "enhancing", "call_id": call_id})
+        try:
+            enhance.enhance_call(call_id)
+            self.on_event({"type": "enhanced", "call_id": call_id})
+        except Exception as e:  # same as titles: keep everything, retry later
+            storage.update_meta(call_id, enhanced_status="pending", enhanced_error=str(e))
+            self.on_event({"type": "enhanced", "call_id": call_id, "error": str(e)})
 
     def _title(self, call_id):
         self.on_event({"type": "titling", "call_id": call_id})

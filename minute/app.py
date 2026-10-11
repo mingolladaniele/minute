@@ -37,6 +37,13 @@ class Api:
     def save_notes(self, call_id, text):
         storage.save_notes(call_id, text)
 
+    def save_enhanced(self, call_id, text):
+        storage.save_enhanced(call_id, text, source="user")
+
+    def regenerate_enhanced(self, call_id):
+        storage.update_meta(call_id, enhanced_status="pending", enhanced_error=None, enhanced_edited=False)
+        self._app.worker.kick()
+
     def delete_call(self, call_id):
         storage.delete_call(call_id)
 

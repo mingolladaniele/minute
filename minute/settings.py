@@ -18,6 +18,7 @@ DEFAULTS = {
     "recordings_dir": str(config.DEFAULT_RECORDINGS),
     "keep_audio": True,
     "ai_titles": True,
+    "ai_enhance": True,  # write enhanced.md (structured notes) when a call ends
     "ai_base_url": "https://api.deepseek.com",
     "ai_model": "deepseek-flash",
     "ai_key_source": "pi",  # "pi": read ~/.pi/agent/auth.json at call time; "custom": ai_key below
