@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 (2026-10-10)
+
+- Ask about your calls finds the right call across languages and synonyms: when not everything fits, the AI first picks the calls to read in full from their notes, instead of matching words. Ask in English about a call held in Italian, or the other way round
+- When no call covers the question, it says so right away
+- The AI's choice of calls is checked: only calls that exist are accepted, and a malformed reply is sent back to the model to fix
+- Faster choice, better answers: the AI thinks briefly to pick the calls and harder to write the answer
+
 ## 0.3.0 (2026-10-10)
 
 - Ask anything: type a question in the bar at the bottom. In a note it answers about that call ("what did we agree on the price?"), on the home page about all your calls, with links to the calls it used. Follow-up questions keep the thread; New chat starts over

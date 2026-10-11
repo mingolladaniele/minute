@@ -4,6 +4,8 @@ import json
 import urllib.error
 import urllib.request
 
+from pydantic import ValidationError
+
 from minute import settings
 
 HTTP_REASONS = {
@@ -38,8 +40,9 @@ def transcript_text(blocks, limit):
     return f"{text[:half]}\n[...]\n{text[-half:]}"
 
 
-def chat(system, user, max_tokens, timeout=60, history=()):
-    """history: earlier (user, assistant) turns of a conversation, oldest first."""
+def chat(system, user, max_tokens, timeout=60, history=(), json_mode=False, reasoning="low"):
+    """history: earlier (user, assistant) turns of a conversation, oldest first.
+    reasoning: how hard a reasoning model thinks (DeepSeek: none, minimal, low, medium, high)."""
     values = settings.load()
     local = settings.ai_is_local(values)
     key = None if local else settings.ai_key(values)
@@ -56,8 +59,10 @@ def chat(system, user, max_tokens, timeout=60, history=()):
                      *[{"role": r, "content": c} for q, a in history for r, c in (("user", q), ("assistant", a))],
                      {"role": "user", "content": user}],
     }
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
     if "deepseek.com" in values["ai_base_url"]:
-        body["reasoning_effort"] = "low"  # other providers may reject the field
+        body["reasoning_effort"] = reasoning  # other providers may reject the field
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -78,3 +83,23 @@ def chat(system, user, max_tokens, timeout=60, history=()):
     if choice.get("finish_reason") == "length" and not (choice["message"].get("content") or "").strip():
         raise AIError("the model ran out of tokens before answering")
     return choice["message"].get("content") or ""
+
+
+def chat_typed(system, user, schema, max_tokens=2000, timeout=60, retries=2, validation_context=None,
+               reasoning="low"):
+    """A reply validated against a pydantic model: JSON mode, then validation; when the reply doesn't fit,
+    the model is shown its reply and the validation errors and asked again (up to `retries` times)."""
+    system = (f"{system}\n\nReply with a single JSON object, nothing else, matching this JSON schema:\n"
+              f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}")
+    history, ask = [], user
+    for attempt in range(retries + 1):
+        reply = chat(system, ask, max_tokens=max_tokens, timeout=timeout, history=history, json_mode=True,
+                     reasoning=reasoning)
+        try:
+            return schema.model_validate_json(reply.strip() or "{}", context=validation_context)
+        except ValidationError as e:
+            problems = "; ".join(f"{'.'.join(map(str, err['loc'])) or 'reply'}: {err['msg']}" for err in e.errors())
+        if attempt < retries:
+            history += [(ask, reply)]
+            ask = f"That reply is not valid: {problems}. Reply again with the corrected JSON object only."
+    raise AIError(f"the model's reply didn't have the expected shape ({problems[:200]})")
