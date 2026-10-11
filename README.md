@@ -29,6 +29,8 @@ Pick the AI in **Settings > AI**, then press **Test**:
 - **Ollama**: a model running on your PC, free and fully offline: nothing leaves your computer. Install [Ollama](https://ollama.com/download), pull a model (`ollama pull qwen3:8b`), enter its name, and raise Ollama's context length to 32k or more so long calls fit.
 - **Other**: any OpenAI-compatible chat API (OpenAI, OpenRouter, Groq, LM Studio...): endpoint, model and key.
 
+**Ask anything**: the bar at the bottom answers questions in plain language. In a note it uses that call (notes, enhanced notes, transcript); on the home page it searches all your calls and links the ones it used.
+
 Without AI, minute still records, transcribes and keeps your notes.
 
 **Nothing is lost when something fails.** Audio is written to disk as it is recorded, and the raw live text line by line. If the speech model is missing or breaks, the call is kept as audio and transcribed later from it; if the live text comes out empty although people talked, it is redone from the audio too. If the AI API fails (no credits, bad key, outage), the note says why and minute retries every few minutes. Calls cut short by a crash are recovered on the next start.

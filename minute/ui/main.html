@@ -173,6 +173,22 @@
   .menu .label { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
   .panel h3 button:hover { color: var(--ink); }
   .talk { display: flex; flex-direction: column; gap: 5px; }
+  .dock-ask input {
+    height: 32px; width: 230px; padding: 0 14px; border: 0; border-radius: 999px; outline: none;
+    background: transparent; color: var(--ink); font: inherit; font-weight: 400;
+  }
+  .dock-ask input::placeholder { color: var(--muted); }
+  .dock-ask input:focus { background: var(--hover); }
+  .dock-main:not(.hidden) ~ .dock-ask { border-left: 1px solid var(--line); padding-left: 4px; margin-left: 2px; }
+  .chat { display: flex; flex-direction: column; gap: 10px; }
+  .chat .q { align-self: flex-end; max-width: 80%; padding: 7px 12px; border-radius: 15px; background: var(--hover); font-size: 14.5px; white-space: pre-wrap; }
+  .chat .a { font-size: 14.5px; line-height: 1.55; }
+  .chat .a > :first-child { margin-top: 0; }
+  .chat .a > :last-child { margin-bottom: 0; }
+  .chat .a p, .chat .a ul, .chat .a ol { margin: 6px 0; }
+  .chat .a ul, .chat .a ol { padding-left: 20px; }
+  .chat .a h1, .chat .a h2, .chat .a h3 { font-size: 15px; margin: 12px 0 4px; }
+  .chat .a code { font: 13px Consolas, monospace; background: var(--hover); padding: 1px 5px; border-radius: 5px; }
   .stamp { align-self: center; color: var(--faint); font-size: 11px; margin: 10px 0 2px; font-variant-numeric: tabular-nums; }
   .bubble { max-width: 80%; padding: 8px 12px; border-radius: 15px; font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
   .bubble.THEM { align-self: flex-start; background: var(--them); border-bottom-left-radius: 5px; }
@@ -335,6 +351,7 @@
     <svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m3 7.5 3-3 3 3"/></svg>
   </button>
   <button class="dock-stop hidden" id="dock-stop" title="Stop recording"><span></span></button>
+  <form class="dock-ask" id="ask-form"><input id="ask" autocomplete="off" spellcheck="false" placeholder="Ask anything"></form>
 </div>
 <div class="toast hidden" id="toast"></div>
 
@@ -353,6 +370,8 @@ const ui = {
   call: null,         // saved call {id, title, started, duration, blocks, notes}
   live: null,         // {id, blocks, tentative, elapsed, title, notes}
   panelOpen: false,
+  panelMode: "transcript",  // what the panel above the dock shows: "transcript" | "ask"
+  ask: { scope: null, turns: [], busy: false },  // Ask anything chat: scope = a call id, or null for all calls
   naming: new Set(),  // call ids whose AI title is being generated
   enhancing: new Set(),  // call ids whose enhanced notes are being generated
   noteView: "mine",      // "mine" | "enhanced"
@@ -666,15 +685,18 @@ function blocksHtml(blocks, tentative) {
   return html ? `<div class="talk">${html}</div>` : "";
 }
 function renderDock() {
-  const show = ui.view === "note";
+  const show = ui.view === "note" || ui.view === "home";
   $("dock").classList.toggle("hidden", !show);
+  $("dock-toggle").classList.toggle("hidden", ui.view !== "note");
+  $("ask").placeholder = ui.view === "note" ? "Ask about this call" : "Ask about your calls";
   $("dock").classList.toggle("live", viewingLive() && ui.state === "recording");
-  $("dock").classList.toggle("open", ui.panelOpen);
+  $("dock").classList.toggle("open", ui.panelOpen && ui.panelMode === "transcript");
   $("dock-stop").classList.toggle("hidden", !(viewingLive() && ui.state === "recording"));
   $("panel").classList.toggle("hidden", !(show && ui.panelOpen));
   if (show && ui.panelOpen) renderPanel();
 }
 function renderPanel() {
+  if (ui.panelMode === "ask") return renderAsk();
   const p = $("panel");
   const live = viewingLive();
   const blocks = live ? ui.live.blocks : ui.call?.blocks || [];
@@ -695,8 +717,55 @@ function renderPanel() {
   });
 }
 $("dock-toggle").addEventListener("click", () => {
-  ui.panelOpen = !ui.panelOpen;
+  ui.panelOpen = !(ui.panelOpen && ui.panelMode === "transcript");
+  ui.panelMode = "transcript";
   renderDock();
+});
+
+/* --- ask anything --- */
+function askScope() {
+  return ui.view === "note" ? (ui.call?.id || ui.live?.id || null) : null;
+}
+function answerHtml(md) {
+  // [Title](call:ID) links to a call; anything else stays plain text
+  return NoteEditor.mdToHtml(md).replace(/\[([^\]]+)\]\(call:([\w-]+)\)/g,
+    (m, title, id) => ui.calls.some((c) => c.id === id) ? `<a class="link" data-call="${id}">${title}</a>` : title);
+}
+function renderAsk() {
+  const p = $("panel"), chat = ui.ask;
+  const turns = chat.turns.map((t) => `<div class="q">${esc(t.q)}</div>` + (
+    t.a ? `<div class="a">${answerHtml(t.a)}</div>`
+      : t.error ? `<div class="a"><span class="bad">${esc(t.error)}</span></div>`
+        : `<div class="a ghost">Thinking…</div>`)).join("");
+  p.innerHTML = `<h3>${chat.scope ? "This call" : "All your calls"} <span class="raw"><button id="ask-new">New chat</button></span></h3><div class="chat">${turns}</div>`;
+  p.scrollTop = p.scrollHeight;
+  $("ask-new").addEventListener("click", () => {
+    ui.ask = { scope: chat.scope, turns: [], busy: false };
+    ui.panelOpen = false;
+    renderDock();
+    $("ask").focus();
+  });
+}
+$("ask-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const q = $("ask").value.trim();
+  if (!q || ui.ask.busy) return;
+  const scope = askScope();
+  if (ui.ask.scope !== scope) ui.ask = { scope, turns: [], busy: false };
+  const chat = ui.ask;
+  const history = chat.turns.filter((t) => t.a).map((t) => [t.q, t.a]);
+  const turn = { q, a: "", error: "" };
+  chat.turns.push(turn);
+  chat.busy = true;
+  $("ask").value = "";
+  ui.panelMode = "ask";
+  ui.panelOpen = true;
+  renderDock();
+  const r = await api().ask(q, history, scope);
+  chat.busy = false;
+  if (r.ok) turn.a = r.answer || "No answer came back.";
+  else turn.error = r.error;
+  if (ui.ask === chat && ui.panelOpen && ui.panelMode === "ask") renderPanel();
 });
 $("dock-stop").addEventListener("click", () => api().stop());
 document.addEventListener("keydown", (e) => {
@@ -908,6 +977,8 @@ $("settings").addEventListener("click", async (e) => {
 document.addEventListener("click", (e) => {
   const link = e.target.closest("[data-url]");
   if (link) { e.preventDefault(); api().open_url(link.dataset.url); return; }
+  const callLink = e.target.closest("[data-call]");
+  if (callLink) { e.preventDefault(); openCall(callLink.dataset.call); return; }
   const b = e.target.closest("[data-raw]");
   if (b && ui.call) api().open_raw(ui.call.id, b.dataset.raw);
 });

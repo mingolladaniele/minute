@@ -11,7 +11,7 @@ import webview
 from PIL import Image
 
 import minute
-from minute import config, model, settings, storage, titles
+from minute import ai, ask, config, model, settings, storage, titles
 from minute.calls import CallWatcher
 from minute.indicator import Indicator
 from minute.recorder import Recorder
@@ -130,6 +130,15 @@ class Api:
         picked = self._app.main.create_file_dialog(webview.FileDialog.FOLDER,
                                                    directory=str(settings.recordings_dir()))
         return picked[0] if picked else None
+
+    def ask(self, question, history=None, call_id=None):
+        """Ask anything, about one call (call_id) or all of them. Runs on pywebview's worker thread."""
+        try:
+            return {"ok": True, "answer": ask.ask(question, [tuple(t) for t in history or []], call_id or None)}
+        except ai.AIError as e:
+            return {"ok": False, "error": str(e)}
+        except Exception as e:  # never leave the page waiting
+            return {"ok": False, "error": f"something went wrong: {e}"}
 
     def test_ai(self):
         try:

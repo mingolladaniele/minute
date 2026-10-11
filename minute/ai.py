@@ -38,7 +38,8 @@ def transcript_text(blocks, limit):
     return f"{text[:half]}\n[...]\n{text[-half:]}"
 
 
-def chat(system, user, max_tokens, timeout=60):
+def chat(system, user, max_tokens, timeout=60, history=()):
+    """history: earlier (user, assistant) turns of a conversation, oldest first."""
     values = settings.load()
     local = settings.ai_is_local(values)
     key = None if local else settings.ai_key(values)
@@ -51,7 +52,9 @@ def chat(system, user, max_tokens, timeout=60):
     body = {
         "model": values["ai_model"].strip(),
         "max_tokens": max_tokens,  # reasoning tokens count against this
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        "messages": [{"role": "system", "content": system},
+                     *[{"role": r, "content": c} for q, a in history for r, c in (("user", q), ("assistant", a))],
+                     {"role": "user", "content": user}],
     }
     if "deepseek.com" in values["ai_base_url"]:
         body["reasoning_effort"] = "low"  # other providers may reject the field
