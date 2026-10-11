@@ -47,8 +47,18 @@ class Api:
     def delete_call(self, call_id):
         storage.delete_call(call_id)
 
-    def open_folder(self, call_id):
-        os.startfile(storage.call_dir(call_id))
+    def open_raw(self, call_id, what):
+        """what: "you" / "them" (audio, in the default player), "text" (raw live transcript), "folder"."""
+        if what == "folder":
+            os.startfile(storage.call_dir(call_id))
+        elif what == "text":
+            os.startfile(storage.raw_text_file(call_id))
+        elif what in ("you", "them"):
+            wav = storage.call_dir(call_id) / f"{what}.wav"
+            if not wav.exists():
+                return False
+            os.startfile(wav)
+        return True
 
     def retitle(self, call_id):
         storage.update_meta(call_id, title_source="default", title_status="pending")

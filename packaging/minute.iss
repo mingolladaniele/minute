@@ -2,7 +2,7 @@
 ; Build with scripts\build.ps1.
 
 #define AppName "minute"
-#define AppVersion "0.2.0"
+#define AppVersion "0.2.1"
 #define AppExe "minute.exe"
 
 [Setup]

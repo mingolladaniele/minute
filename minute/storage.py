@@ -147,6 +147,27 @@ def live_lines(call_id):
     return lines
 
 
+def raw_text_file(call_id):
+    """A readable copy of the raw live text (live.jsonl), written next to it: raw-transcript.txt."""
+    lines = live_lines(call_id)
+    meta = read_meta(call_id)
+    out = [f"{meta.get('title', call_id)}  ({meta.get('started', '').replace('T', ' ')})",
+           "Raw live transcript, exactly as it was committed during the call.", ""]
+    if not lines:
+        out.append("(nothing was transcribed live; the audio files hold the call)")
+    turns = []  # live deltas split words mid-way: rejoin consecutive pieces of the same speaker
+    for t, label, text in lines:
+        if turns and turns[-1][1] == label:
+            turns[-1][2] += text
+        else:
+            turns.append([t, label, text])
+    for t, label, text in turns:
+        out.append(f"[{t}] {label}: {text.strip()}")
+    path = call_dir(call_id) / "raw-transcript.txt"
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
+    return path
+
+
 def audio_paths(call_id):
     return {t.upper(): call_dir(call_id) / f"{t}.wav" for t in TRACKS if (call_dir(call_id) / f"{t}.wav").exists()}
 
@@ -227,7 +248,8 @@ def load_call(call_id):
     else:  # transcript still pending: show what was heard live, if anything
         blocks = merge_blocks(live_lines(call_id))
     return {**read_meta(call_id), "blocks": blocks, "notes": notes_of(call_id),
-            "enhanced": enhanced_of(call_id), "has_audio": bool(audio_paths(call_id))}
+            "enhanced": enhanced_of(call_id), "has_audio": bool(audio_paths(call_id)),
+            "audio": [t for t in TRACKS if (d / f"{t}.wav").exists()]}
 
 
 def delete_call(call_id):
