@@ -1,12 +1,13 @@
 [project]
 name = "minute"
-version = "0.2.6"
+version = "0.3.1"
 description = "Local meeting notes: live transcription of your calls, on your machine."
 requires-python = ">=3.12"
 dependencies = [
     "numpy>=2",
     "pillow>=12.3.0",
     "pyaudiowpatch>=0.2.12",
+    "pydantic>=2.14.0",
     "pystray>=0.19.5",
     "pywebview>=6.2.1",
 ]
