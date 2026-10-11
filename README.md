@@ -51,3 +51,9 @@ scripts\simulate-call.cmd   # a fake 3-minute call; needs ffmpeg, wear headphone
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\build.ps1   # installer in dist\; needs Inno Setup 6
 ```
+
+## About this project
+
+minute is a side project: don't expect regular updates or support. I hope it's a good base for others to build something even better. Fork it, change it, ship it.
+
+[MIT License](LICENSE)
