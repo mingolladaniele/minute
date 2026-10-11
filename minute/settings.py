@@ -32,7 +32,8 @@ def _windows_language():
 
 
 def default_language():
-    """Windows' display language when the model supports it (exactly, or the same language), else English."""
+    """Windows' display language when the model supports it (exactly, or the same language), else English.
+    Offered first among the fixed languages in Settings."""
     win = _windows_language()
     if win in LANGUAGES:
         return win
@@ -43,7 +44,9 @@ def default_language():
 DEFAULTS = {
     "launch_at_startup": False,
     "auto_record": True,  # start a note when a call app takes the mic, stop when the call ends
-    "language": default_language(),  # speech recognition language; "auto" lets the model detect it
+    # Speech recognition language. "auto" is the default: in tests it matched a correct fixed language and
+    # followed calls that switch language, while a wrong fixed language dropped whole sentences.
+    "language": "auto",
     "recordings_dir": str(config.DEFAULT_RECORDINGS),
     "keep_audio": True,
     "ai_titles": True,

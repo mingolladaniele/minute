@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.6 (2026-10-10)
+
+- Language detection is now the default and the recommended setting: it handles any language and calls that switch language, while a wrong fixed language could drop whole sentences
+- Better enhanced notes: misheard words are corrected, what you put in bold or as a heading is treated as most important, no generic sections, technical terms kept as they are, and instructions hidden in a transcript are ignored
+
 ## 0.2.5 (2026-10-10)
 
 - Much lighter between calls: the speech model is freed after 10 minutes without calls (about 1 GB of RAM) and reloads in a couple of seconds when the next call starts, while its audio is already being recorded

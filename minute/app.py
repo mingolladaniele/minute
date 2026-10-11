@@ -116,6 +116,7 @@ class Api:
         values["ai_key"] = "•" * 8 if values["ai_key"] else ""  # never send the key back to the page
         values["pi_key_available"] = settings.pi_key_available()
         values["languages"] = settings.LANGUAGES
+        values["windows_language"] = settings.default_language()
         return values
 
     def save_settings(self, values):

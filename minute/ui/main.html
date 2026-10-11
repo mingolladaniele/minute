@@ -750,10 +750,11 @@ $("home").addEventListener("click", (e) => {
 
 /* --- settings --- */
 // Every language the speech model supports, named by the browser ("sv-SE" -> "Swedish (Sweden)").
-function languageOptions(codes) {
+function languageOptions(codes, preferred) {
   const names = new Intl.DisplayNames(["en"], { type: "language" });
   const named = codes.map((c) => [c, names.of(c.replace("ar-AR", "ar")) || c]).sort((a, b) => a[1].localeCompare(b[1]));
-  return [...named, ["auto", "Detect automatically"]];
+  const first = named.filter(([c]) => c === preferred);
+  return [["auto", "Detect automatically (recommended)"], ...first, ...named.filter(([c]) => c !== preferred)];
 }
 let prefs = null;
 let about = null;
@@ -817,8 +818,8 @@ function renderSettings() {
     <div class="card">
       <div class="setting"><div class="label"><b>Record calls automatically</b><span>Start a note when Meet, Zoom, Teams, Slack, WhatsApp or another call app turns on your mic, and stop when the call ends. Dictation apps never trigger it.</span></div>${toggle("auto_record", p.auto_record)}</div>
       <div class="setting"><div class="label"><b>Open at login</b><span>Start minute in the tray when you sign in to Windows.</span></div>${toggle("launch_at_startup", p.launch_at_startup)}</div>
-      <div class="setting"><div class="label"><b>Language</b><span>What your calls are spoken in. A fixed language is more accurate than detection.</span></div>
-        <select data-key="language">${languageOptions(p.languages || []).map(([v, n]) => `<option value="${v}" ${v === p.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
+      <div class="setting"><div class="label"><b>Language</b><span>What your calls are spoken in. Detection handles calls in any language, and calls that switch language. Pick a fixed language only if every call is in it.</span></div>
+        <select data-key="language">${languageOptions(p.languages || [], p.windows_language).map(([v, n]) => `<option value="${v}" ${v === p.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
     </div>
     <h2>Recordings</h2>
     <div class="card">
