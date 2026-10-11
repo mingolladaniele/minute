@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.3 (2026-10-10)
+
+- The auto-stop is visible: when the call app lets go of the mic the pill turns amber and the note shows "Call ended · stopping in 32s"
+- Keep recording: cancels the auto-stop for this call, you stop it yourself
+- A notification confirms when a call has ended and its notes are saved
+- One "Calls" button to go back, instead of Back and Home doing the same thing
+
 ## 0.2.2 (2026-10-10)
 
 - About section in Settings: installed version, creator, website, GitHub repository and this changelog
