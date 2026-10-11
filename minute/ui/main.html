@@ -128,11 +128,22 @@
   }
   .chip.rec { color: var(--ink); }
   .chip.rec i { width: 7px; height: 7px; border-radius: 50%; background: var(--rec); animation: pulse 1.6s ease-in-out infinite; }
-  textarea.notes {
-    width: 100%; min-height: 50vh; resize: none; border: 0; outline: none; background: transparent;
-    font: 16px/1.7 var(--sans); color: var(--ink); padding: 0;
+  .notes {
+    min-height: 50vh; outline: none; font: 16px/1.7 var(--sans); color: var(--ink);
+    overflow-wrap: anywhere; caret-color: var(--ink);
   }
-  textarea.notes::placeholder { color: var(--faint); }
+  .notes.is-empty::before { content: "Write notes"; color: var(--faint); position: absolute; pointer-events: none; }
+  .notes p { margin: 0 0 6px; }
+  .notes h1, .notes h2, .notes h3 { font-family: var(--serif); font-weight: 400; letter-spacing: -.01em; margin: 18px 0 6px; line-height: 1.25; }
+  .notes h1 { font-size: 26px; }
+  .notes h2 { font-size: 21px; }
+  .notes h3 { font-size: 18px; }
+  .notes ul, .notes ol { margin: 2px 0 8px; padding-left: 24px; }
+  .notes li { margin: 2px 0; padding-left: 2px; }
+  .notes ul ul, .notes ol ul { list-style: circle; }
+  .notes li::marker { color: var(--muted); }
+  .notes strong, .notes b { font-weight: 650; }
+  .notes code { font: 14px Consolas, monospace; background: var(--hover); padding: 1px 5px; border-radius: 5px; }
 
   /* --- transcript dock + panel --- */
   .dock {
@@ -218,6 +229,27 @@
   .bad { color: var(--rec); }
   .dim { opacity: .45; pointer-events: none; }
 
+  .status {
+    display: flex; align-items: flex-start; gap: 14px; margin: -10px 0 24px; padding: 12px 14px;
+    border-radius: 12px; background: var(--hover); font-size: 13.5px; color: var(--muted);
+  }
+  .status b { color: var(--ink); font-weight: 600; }
+  .status .grow { flex: 1; }
+  .status .btn-line { height: 30px; font-size: 13px; }
+  .row .flag { color: var(--faint); font-size: 12px; margin-left: 10px; font-weight: 500; }
+  .chip.audio-only { color: var(--muted); }
+  .chip.audio-only i { background: var(--faint); }
+
+  .engine {
+    display: inline-flex; align-items: center; gap: 7px; margin-left: 14px; padding: 4px 10px;
+    border-radius: 999px; font-size: 12.5px; font-weight: 500; color: var(--muted); background: var(--hover);
+  }
+  .engine i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .engine.ready i { background: var(--live); }
+  .engine.loading i { animation: pulse 1.2s ease-in-out infinite; }
+  .engine.missing i { background: #e0a43a; }
+  .engine.error i { background: var(--rec); }
+
   .toast {
     position: fixed; top: 74px; left: 50%; transform: translateX(-50%); z-index: 30;
     background: var(--dark); color: var(--on-dark); padding: 8px 16px; border-radius: 999px; font-size: 13.5px;
@@ -228,7 +260,7 @@
 </head>
 <body>
 <div class="topbar">
-  <div class="brand" id="brand"><img src="icon.png" alt="">minute</div>
+  <div class="brand" id="brand"><img src="icon.png" alt="">minute<span class="engine" id="engine"><i></i><span></span></span></div>
   <div class="navpill hidden" id="nav">
     <button id="back" title="Back"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
     <button id="home-btn" title="Home"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M2.5 7 8 2.5 13.5 7v6.5h-3.5v-4h-4v4H2.5z"/></svg></button>
@@ -254,7 +286,8 @@
   <section class="page hidden" id="note">
     <h1 class="note-title" id="title" contenteditable="true" spellcheck="false" data-placeholder="New call"></h1>
     <div class="chips" id="chips"></div>
-    <textarea class="notes" id="notes" placeholder="Write notes"></textarea>
+    <div class="status hidden" id="status"></div>
+    <div class="notes" id="notes"></div>
   </section>
   <section class="page settings hidden" id="settings"></section>
 </div>
@@ -267,6 +300,7 @@
 </button>
 <div class="toast hidden" id="toast"></div>
 
+<script src="editor.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
 const api = () => window.pywebview.api;
@@ -284,6 +318,7 @@ const ui = {
   panelOpen: false,
   naming: new Set(),  // call ids whose AI title is being generated
   model: { ready: true, downloading: false, done: 0, total: 0, error: "" },
+  engine: { state: "unloaded", error: null },
 };
 const viewingLive = () => ui.view === "note" && ui.live && !ui.call;
 
@@ -355,7 +390,7 @@ function renderHome() {
   for (const [g, calls] of groups) {
     html += `<div class="group">${g} <span>${calls.length}</span></div>`;
     html += calls.map((c) => `<button class="row" data-id="${c.id}"><span class="doc">${ICON_DOC}</span>
-      <span class="title ${ui.naming.has(c.id) ? "naming" : ""}">${esc(c.title)}</span><span class="meta">${hhmm(c.started)} · ${duration(c.duration)}</span></button>`).join("");
+      <span class="title ${ui.naming.has(c.id) ? "naming" : ""}">${esc(c.title)}${flag(c)}</span><span class="meta">${hhmm(c.started)} · ${duration(c.duration)}</span></button>`).join("");
   }
   if (!ui.live && !ui.calls.length) {
     html = `${modelBanner()}<div class="empty"><img src="icon.png" alt=""><h2>No calls yet</h2>
@@ -407,9 +442,44 @@ function renderNote() {
   if (!src) return;
   if (document.activeElement !== $("title")) $("title").textContent = src.title || "";
   $("title").classList.toggle("naming", !!ui.call && ui.naming.has(ui.call.id));
-  if (document.activeElement !== $("notes")) $("notes").value = src.notes || "";
+  if (document.activeElement !== $("notes")) editor.setMarkdown(src.notes || "");
   renderChips();
-  autosize();
+  renderStatus();
+}
+function flag(c) {
+  if (c.transcript === "pending") return `<span class="flag">${ui.transcribing === c.id ? "Transcribing…" : "Transcript pending"}</span>`;
+  if (c.title_status === "pending" && c.title_error) return `<span class="flag">Title pending</span>`;
+  return "";
+}
+function renderStatus() {
+  const c = ui.call, el = $("status");
+  let html = "";
+  if (c && c.transcript === "pending") {
+    const doing = ui.transcribing === c.id;
+    html = `<div class="grow"><b>${doing ? "Transcribing from the saved audio…" : "Transcript pending"}</b><br>
+      ${esc(c.transcript_error || "")}${c.has_audio ? ". The audio is saved: minute transcribes it on its own as soon as it can." : ""}</div>
+      ${doing ? "" : `<button class="btn-line" data-retry="${c.id}">Retry now</button>`}`;
+  } else if (c && c.title_status === "pending" && c.title_error) {
+    html = `<div class="grow"><b>AI title not generated yet</b><br>${esc(c.title_error)}. minute retries every few minutes.</div>
+      <button class="btn-line" data-retry="${c.id}">Retry now</button>`;
+  }
+  el.innerHTML = html;
+  el.classList.toggle("hidden", !html);
+}
+$("status").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-retry]");
+  if (b) { api().retry(b.dataset.retry); b.disabled = true; b.textContent = "Retrying…"; }
+});
+async function refreshCall(id) {
+  ui.calls = await api().list_calls();
+  if (ui.view === "note" && ui.call?.id === id) {
+    const fresh = await api().get_call(id);
+    const keep = { notes: ui.call.notes };
+    if (document.activeElement === $("title")) keep.title = ui.call.title;
+    ui.call = { ...fresh, ...keep };
+    renderNote();
+    if (ui.panelOpen) renderPanel();
+  } else if (ui.view === "home") renderHome();
 }
 function renderChips() {
   if (ui.call) {
@@ -417,14 +487,11 @@ function renderChips() {
     $("chips").innerHTML = `<span class="chip">${ICON_CAL}${day(c.started)} ${hhmm(c.started)}</span>
       <span class="chip">${ICON_CLOCK}${duration(c.duration)}</span>`;
   } else if (ui.live) {
+    const off = ui.live.off;
     $("chips").innerHTML = `<span class="chip">${ICON_CAL}Today ${hhmm(new Date().toISOString())}</span>
-      <span class="chip rec"><i></i>${ui.state === "loading" ? "Starting" : "Recording"}</span>`;
+      <span class="chip rec"><i></i>${ui.state === "loading" ? "Starting" : "Recording"}</span>
+      ${off ? `<span class="chip audio-only" title="${esc(off)}"><i></i>Audio only, transcript later</span>` : ""}`;
   }
-}
-function autosize() {
-  const t = $("notes");
-  t.style.height = "auto";
-  t.style.height = `${t.scrollHeight}px`;
 }
 
 // Title and notes save as you type. A live call gets its id only once recording
@@ -438,20 +505,24 @@ function scheduleSave() {
 async function flushSave() {
   const src = ui.call || ui.live, id = currentId();
   if (!src || !id) return;
-  await api().save_notes(id, src.notes || "");
+  if (src.notesDirty) {
+    src.notesDirty = false;
+    await api().save_notes(id, src.notes || "");
+  }
   if (src.titleDirty) {
     src.titleDirty = false;
     await api().rename_call(id, src.title || "");
     if (ui.call) ui.calls = await api().list_calls();
   }
 }
-$("notes").addEventListener("input", () => {
+// Notes are Markdown on disk; the editor shows them formatted (see editor.js).
+const editor = (window.minuteEditor = NoteEditor.create($("notes"), (md) => {
   const src = ui.call || ui.live;
   if (!src) return;
-  src.notes = $("notes").value;
-  autosize();
+  src.notes = md;
+  src.notesDirty = true;
   scheduleSave();
-});
+}));
 $("title").addEventListener("input", () => {
   const src = ui.call || ui.live;
   if (!src) return;
@@ -460,7 +531,7 @@ $("title").addEventListener("input", () => {
   scheduleSave();
 });
 $("title").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); $("notes").focus(); }
+  if (e.key === "Enter") { e.preventDefault(); editor.focus(); }
 });
 
 /* --- menu --- */
@@ -523,7 +594,9 @@ function renderPanel() {
   const blocks = live ? ui.live.blocks : ui.call?.blocks || [];
   const atBottom = p.scrollHeight - p.scrollTop - p.clientHeight < 40;
   const body = blocksHtml(blocks, live ? ui.live.tentative : null);
-  const empty = live ? "Listening. Text appears here as people speak." : "Nothing was transcribed.";
+  const empty = live
+    ? (ui.live.off ? `Live text is unavailable (${esc(ui.live.off)}). The audio is being saved and will be transcribed later.` : "Listening. Text appears here as people speak.")
+    : (ui.call?.transcript === "pending" ? "The transcript isn't ready yet." : "Nothing was transcribed.");
   p.innerHTML = `<h3>Transcript ${live ? "" : `<button id="copy-tr">Copy</button>`}</h3>${body || `<p class="ghost">${empty}</p>`}`;
   if (live && atBottom) p.scrollTop = p.scrollHeight;
   $("copy-tr")?.addEventListener("click", async () => {
@@ -542,6 +615,22 @@ function setWave(level) {
   [...$("wave").children].forEach((b, i) => {
     b.style.height = `${4 + Math.round(12 * Math.min(1, level * 1.6) * [0.6, 1, 0.8, 0.5][i])}px`;
   });
+}
+
+/* --- speech model status, always visible on the home bar --- */
+function renderEngine() {
+  const { state, error } = ui.engine;
+  const label = {
+    ready: "Transcription ready",
+    loading: "Loading speech model",
+    unloaded: "Loading speech model",
+    missing: "Audio only: speech model missing",
+    error: "Speech model error",
+  }[state] || state;
+  const el = $("engine");
+  el.className = `engine ${state === "unloaded" ? "loading" : state}`;
+  el.querySelector("span").textContent = label;
+  el.title = error || (state === "ready" ? "Live transcription works. Calls are transcribed as they happen." : "");
 }
 
 /* --- speech model (first run on a machine without Handy) --- */
@@ -602,6 +691,7 @@ function renderSettings() {
     <h1>Settings</h1>
     <h2>General</h2>
     <div class="card">
+      <div class="setting"><div class="label"><b>Record calls automatically</b><span>Start a note when Meet, Zoom, Teams, Slack, WhatsApp or another call app turns on your mic, and stop when the call ends. Dictation apps never trigger it.</span></div>${toggle("auto_record", p.auto_record)}</div>
       <div class="setting"><div class="label"><b>Open at login</b><span>Start minute in the tray when you sign in to Windows.</span></div>${toggle("launch_at_startup", p.launch_at_startup)}</div>
       <div class="setting"><div class="label"><b>Language</b><span>What your calls are spoken in. A fixed language is more accurate than detection.</span></div>
         <select data-key="language">${LANGUAGES.map(([v, n]) => `<option value="${v}" ${v === p.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
@@ -665,7 +755,7 @@ window.minute = {
       if (ev.state === "loading" && prev === "idle") {
         ui.live = { id: null, blocks: [], tentative: {}, elapsed: 0, title: "", notes: "" };
         openLive();
-        $("notes").focus();
+        editor.focus();
       }
       if (ev.state === "recording" && ui.live && !ui.live.id) {
         ui.live.id = ev.call_id;
@@ -679,6 +769,7 @@ window.minute = {
         ui.calls = await api().list_calls();
         setWave(0);
         if (wasViewing && ev.call_id && ui.calls.some((c) => c.id === ev.call_id)) await openCall(ev.call_id);
+        else if (wasViewing) showHome();
         else if (ui.view === "home") renderHome();
       }
       renderTopbar();
@@ -701,16 +792,26 @@ window.minute = {
       refreshTitles();
     } else if (ev.type === "title") {
       ui.naming.delete(ev.call_id);
-      if (ev.title) {
-        ui.calls = await api().list_calls();
-        if (ui.call?.id === ev.call_id && document.activeElement !== $("title")) ui.call.title = ev.title;
-      } else if (ev.error) {
-        toast(`No AI title: ${ev.error}`, true);
-      }
-      refreshTitles();
+      await refreshCall(ev.call_id);  // failures show inline on the note, not as toasts: retries are automatic
+    } else if (ev.type === "transcribing") {
+      ui.transcribing = ev.call_id;
+      await refreshCall(ev.call_id);
+    } else if (ev.type === "call_updated") {
+      if (ui.transcribing === ev.call_id) ui.transcribing = null;
+      await refreshCall(ev.call_id);
+    } else if (ev.type === "transcription_off" && ui.live) {
+      ui.live.off = ev.reason;
+      if (viewingLive()) { renderChips(); if (ui.panelOpen) renderPanel(); }
+    } else if (ev.type === "engine") {
+      ui.engine = { state: ev.state, error: ev.error };
+      if (ev.state === "ready") ui.model.ready = true;
+      renderEngine();
+      if (ui.view === "home") renderHome();
+    } else if (ev.type === "discarded") {
+      toast("Short recording discarded");
     } else if (ev.type === "model_missing") {
       ui.model.ready = false;
-      showHome();
+      if (ui.view === "home") renderHome();
     } else if (ev.type === "download") {
       Object.assign(ui.model, { downloading: true, done: ev.done, total: ev.total });
       if (ui.view === "home") renderHome();
@@ -737,6 +838,8 @@ window.addEventListener("pywebviewready", async () => {
   const s = await api().status();
   ui.state = s.state;
   Object.assign(ui.model, { ready: s.model_ready, downloading: s.downloading });
+  ui.engine = { state: s.engine, error: s.engine_error };
+  renderEngine();
   showHome();
 });
 </script>

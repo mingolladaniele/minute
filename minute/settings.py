@@ -13,6 +13,7 @@ RUN_VALUE = "minute"
 
 DEFAULTS = {
     "launch_at_startup": False,
+    "auto_record": True,  # start a note when a call app takes the mic, stop when the call ends
     "language": "it-IT",
     "recordings_dir": str(config.DEFAULT_RECORDINGS),
     "keep_audio": True,

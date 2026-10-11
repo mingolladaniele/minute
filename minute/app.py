@@ -9,8 +9,10 @@ import webview
 from PIL import Image
 
 from minute import config, model, settings, storage, titles
+from minute.calls import CallWatcher
 from minute.indicator import Indicator
 from minute.recorder import Recorder
+from minute.worker import Worker
 
 MUTEX_NAME = "Local\\minute-single-instance"
 ERROR_ALREADY_EXISTS = 183
@@ -42,13 +44,23 @@ class Api:
         os.startfile(storage.call_dir(call_id))
 
     def retitle(self, call_id):
-        self._app.generate_title(call_id, force=True)
+        storage.update_meta(call_id, title_source="default", title_status="pending")
+        self._app.worker.kick()
+
+    def retry(self, call_id):
+        """Redo whatever failed for this call (transcript from audio, AI title) now."""
+        meta = storage.read_meta(call_id)
+        if meta.get("title_status") == "pending":
+            storage.update_meta(call_id, title_error=None)
+        self._app.worker.kick()
 
     # recording
     def status(self):
         rec = self._app.recorder
-        return {"state": rec.state, "call_id": rec.call_id, "model_ready": config.find_model() is not None
-                or bool(self._app.args.model), "downloading": self._app.downloading}
+        return {"state": rec.state, "call_id": rec.call_id, "auto": rec.auto,
+                "engine": rec.engine_state, "engine_error": rec.engine_error,
+                "model_ready": config.find_model() is not None or bool(self._app.args.model),
+                "downloading": self._app.downloading}
 
     def start(self):
         self._app.start()
@@ -70,6 +82,7 @@ class Api:
         if values.get("ai_key", "").startswith("•"):
             values.pop("ai_key")  # unchanged placeholder
         settings.save(values)
+        self._app.worker.kick()  # e.g. a new API key: pending titles can go now
         return self.get_settings()
 
     def choose_folder(self):
@@ -96,17 +109,26 @@ class App:
         self.main = None
         self.indicator = None
         self.tray = None
+        self.worker = None
+        self.watcher = None
 
     # --- recording -------------------------------------------------------
     def start(self):
         self.recorder.start()
         self._refresh_tray()
 
-    def stop(self):
-        self.recorder.stop()
+    def auto_start(self, app):
+        if self.recorder.start(auto=True, app=app):
+            self._notify(f"Taking notes on your {app} call. Hover the pill on the right to stop.")
+
+    def stop(self, source="window"):
+        """A stop from the user (window, pill, tray), as opposed to the call ending."""
+        if self.watcher:
+            self.watcher.user_stopped()
+        self.recorder.stop(source)
 
     def toggle(self):
-        self.stop() if self.recorder.busy else self.start()
+        self.stop("tray") if self.recorder.busy else self.start()
 
     def _emit(self, ev):
         self._js(self.main, f"window.minute && minute.onEvent({json.dumps(ev, ensure_ascii=False)})")
@@ -122,22 +144,11 @@ class App:
                 self.indicator.hide()
             self._refresh_tray()
         elif ev["type"] == "saved":
-            self.generate_title(ev["call_id"])
-        elif ev["type"] == "model_missing":
+            self.worker.kick()  # transcript catch-up, AI title, audio cleanup
+        elif ev["type"] == "model_missing" and not self.recorder.auto:
             self.show_main()
-
-    def generate_title(self, call_id, force=False):
-        def work():
-            self._emit({"type": "titling", "call_id": call_id})
-            try:
-                if force:
-                    storage.rename_call(call_id, storage.load_call(call_id)["title"], source="default")
-                title = titles.title_call(call_id)
-                self._emit({"type": "title", "call_id": call_id, "title": title})
-            except Exception as e:  # TitleError, or anything unexpected: the call keeps its default name
-                self._emit({"type": "title", "call_id": call_id, "title": None, "error": str(e)})
-
-        threading.Thread(target=work, daemon=True).start()
+        elif ev["type"] == "model_missing":
+            self._notify("Recording audio only: the speech model isn't downloaded yet. Open minute to get it.")
 
     def download_model(self):
         if self.downloading:
@@ -156,6 +167,8 @@ class App:
             try:
                 model.download(progress)
                 self._emit({"type": "download_done"})
+                self.preload()
+                self.worker.kick()  # transcribe what was recorded as audio only
             except Exception as e:
                 self._emit({"type": "download_error", "message": str(e)})
             finally:
@@ -195,6 +208,21 @@ class App:
         self.tray = pystray.Icon("minute", Image.open(config.ICON), "minute", menu)
         self.tray.run_detached()
 
+    def preload(self):
+        """Load the speech model in the background so it's ready before the next call starts."""
+        def work():
+            try:
+                self.recorder.engine()
+            except Exception:
+                pass  # state and reason already reported through the "engine" event
+        threading.Thread(target=work, name="minute-preload", daemon=True).start()
+
+    def _notify(self, message):
+        try:
+            self.tray.notify(message, "minute")
+        except Exception:
+            pass  # notifications are a nicety
+
     def _refresh_tray(self):
         if self.tray:
             self.tray.title = "minute (recording)" if self.recorder.busy else "minute"
@@ -205,6 +233,7 @@ class App:
         threading.Thread(target=self._shutdown, daemon=True).start()
 
     def _shutdown(self):
+        self.worker.stop()
         self.recorder.close()  # finishes and saves a call in progress
         if self.tray:
             self.tray.stop()
@@ -217,8 +246,13 @@ class App:
             width=880, height=760, min_size=(560, 480), background_color="#F7F6F1",
         )
         self.main.events.closing += self._on_main_closing
-        self.indicator = Indicator(on_click=self.show_main, on_stop=self.stop)
+        self.indicator = Indicator(on_click=self.show_main, on_stop=lambda: self.stop("pill"))
         self._build_tray()
+        storage.recover_interrupted()  # calls cut short by a crash or power loss
+        self.preload()
+        self.worker = Worker(self.recorder, self._emit)
+        self.watcher = CallWatcher(self.recorder, start=self.auto_start, stop=lambda: self.recorder.stop("call ended"),
+                                   enabled=lambda: settings.load()["auto_record"])
         webview.start(icon=str(config.ICON_ICO))
 
 

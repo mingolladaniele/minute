@@ -27,6 +27,25 @@ def _excerpt(blocks):
     return f"{text[:half]}\n[...]\n{text[-half:]}"
 
 
+HTTP_REASONS = {
+    401: "the API key was rejected",
+    402: "the API account has run out of credits",
+    403: "the API key isn't allowed to use this model",
+    404: "the model or endpoint doesn't exist",
+    429: "too many requests to the AI service",
+}
+
+
+def _http_reason(e):
+    """A sentence a person can act on, plus the provider's own message."""
+    try:
+        detail = json.loads(e.read())["error"]["message"]
+    except Exception:
+        detail = ""
+    reason = HTTP_REASONS.get(e.code) or ("the AI service is down" if e.code >= 500 else f"HTTP {e.code}")
+    return f"{reason} ({detail[:120]})" if detail else reason
+
+
 def _clean(title):
     title = title.strip().splitlines()[0] if title.strip() else ""
     return title.strip().strip("\"'“”«»*#").rstrip(".").strip()[:90]
@@ -59,7 +78,7 @@ def generate(call):
         with urllib.request.urlopen(req, timeout=60) as r:
             reply = json.load(r)
     except urllib.error.HTTPError as e:
-        raise TitleError(f"{e.code} from {values['ai_base_url']}: {e.read()[:200].decode(errors='replace')}") from e
+        raise TitleError(_http_reason(e)) from e
     except (urllib.error.URLError, TimeoutError) as e:
         raise TitleError(f"cannot reach {values['ai_base_url']}: {e}") from e
     title = _clean(reply["choices"][0]["message"].get("content") or "")
