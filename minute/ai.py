@@ -1,4 +1,5 @@
-"""Minimal client for an OpenAI-compatible chat API (DeepSeek V4.1 Flash by default), shared by titles and notes."""
+"""Minimal client for an OpenAI-compatible chat API (DeepSeek V4.1 Flash by default, or a local model
+through Ollama), shared by titles and notes."""
 import json
 import urllib.error
 import urllib.request
@@ -39,26 +40,36 @@ def transcript_text(blocks, limit):
 
 def chat(system, user, max_tokens, timeout=60):
     values = settings.load()
-    key = settings.ai_key(values)
-    if not key:
-        raise AIError("no API key: add one in Settings, or log in to DeepSeek in pi")
+    local = settings.ai_is_local(values)
+    key = None if local else settings.ai_key(values)
+    if not local and not key:
+        raise AIError("no API key: add one in Settings")
+    if not values["ai_base_url"].strip().startswith(("http://", "https://")):
+        raise AIError("no endpoint: add the provider's address in Settings")
+    if not values["ai_model"].strip():
+        raise AIError("no model chosen: add one in Settings")
     body = {
-        "model": values["ai_model"],
+        "model": values["ai_model"].strip(),
         "max_tokens": max_tokens,  # reasoning tokens count against this
-        "reasoning_effort": "low",
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
     }
-    req = urllib.request.Request(
-        values["ai_base_url"].rstrip("/") + "/chat/completions",
-        json.dumps(body).encode(),
-        {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-    )
+    if "deepseek.com" in values["ai_base_url"]:
+        body["reasoning_effort"] = "low"  # other providers may reject the field
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    if local:
+        timeout *= 5  # a model on this PC can be far slower than a hosted one
+    req = urllib.request.Request(values["ai_base_url"].rstrip("/") + "/chat/completions",
+                                 json.dumps(body).encode(), headers)
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             reply = json.load(r)
     except urllib.error.HTTPError as e:
         raise AIError(_http_reason(e)) from e
     except (urllib.error.URLError, TimeoutError) as e:
+        if local:
+            raise AIError(f"the local model isn't answering at {values['ai_base_url']}: is Ollama running?") from e
         raise AIError(f"cannot reach {values['ai_base_url']}: {getattr(e, 'reason', e)}") from e
     choice = reply["choices"][0]
     if choice.get("finish_reason") == "length" and not (choice["message"].get("content") or "").strip():

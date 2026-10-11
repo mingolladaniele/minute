@@ -5,6 +5,7 @@ import os
 import sys
 import winreg
 from pathlib import Path
+from urllib.parse import urlparse
 
 from minute import config
 
@@ -53,7 +54,9 @@ DEFAULTS = {
     "ai_enhance": True,  # write enhanced.md (structured notes) when a call ends
     "ai_base_url": "https://api.deepseek.com",
     "ai_model": "deepseek-flash",
-    "ai_key_source": "pi",  # "pi": read ~/.pi/agent/auth.json at call time; "custom": ai_key below
+    # "pi": the DeepSeek key of the pi coding agent, read from ~/.pi/agent/auth.json at call time;
+    # "custom": ai_key below; "" (never chosen): pi when its key exists, else custom
+    "ai_key_source": "",
     "ai_key": "",
 }
 
@@ -64,6 +67,8 @@ def load():
     except (OSError, json.JSONDecodeError):
         saved = {}
     values = {**DEFAULTS, **{k: v for k, v in saved.items() if k in DEFAULTS}}
+    if not values["ai_key_source"]:
+        values["ai_key_source"] = "pi" if pi_key_available() else "custom"
     # The registry is the truth for autostart: the installer can set it too.
     values["launch_at_startup"] = _startup_enabled()
     return values
@@ -99,6 +104,12 @@ def _pi_key():
 def ai_key(values=None):
     values = values or load()
     return _pi_key() if values["ai_key_source"] == "pi" else (values["ai_key"] or None)
+
+
+def ai_is_local(values=None):
+    """A model on this PC (Ollama, LM Studio...): no key needed, nothing leaves the machine."""
+    host = urlparse((values or load())["ai_base_url"]).hostname or ""
+    return host in ("localhost", "127.0.0.1", "::1")
 
 
 def _launch_command():

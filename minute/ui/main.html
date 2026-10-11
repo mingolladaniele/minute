@@ -809,9 +809,36 @@ async function showSettings() {
 
 const toggle = (key, on) => `<label class="switch"><input type="checkbox" data-key="${key}" ${on ? "checked" : ""}><i></i></label>`;
 
+const PROVIDERS = [["deepseek", "DeepSeek"], ["ollama", "Ollama"], ["other", "Other"]];
+const PROVIDER_PRESETS = {
+  deepseek: { ai_base_url: "https://api.deepseek.com", ai_model: "deepseek-flash" },
+  ollama: { ai_base_url: "http://localhost:11434/v1", ai_model: "" },
+  other: { ai_base_url: "", ai_model: "" },
+};
+function providerOf(p) {
+  const url = (p.ai_base_url || "").toLowerCase();
+  if (url.includes("api.deepseek.com")) return "deepseek";
+  if (url.includes("localhost:11434") || url.includes("127.0.0.1:11434")) return "ollama";
+  return "other";
+}
+function providerHint(provider) {
+  if (provider === "deepseek") return "DeepSeek V4.1 Flash: fast, good in many languages, and inexpensive.";
+  if (provider === "ollama") return `A model running on this PC: free, and nothing leaves your computer. Install <a class="link" data-url="https://ollama.com/download">Ollama</a>, pull a model, and raise its context length to 32k or more in Ollama's settings so long calls fit.`;
+  return "Any OpenAI-compatible chat API: OpenAI, OpenRouter, Groq, LM Studio and more.";
+}
+function keyRows(p) {
+  const fromPi = p.ai_key_source === "pi";
+  const piChoice = p.pi_key_available || fromPi
+    ? `<div class="seg" id="key-source"><button data-v="pi" class="${fromPi ? "on" : ""}">From pi</button><button data-v="custom" class="${fromPi ? "" : "on"}">Paste</button></div>` : "";
+  const where = providerOf(p) === "deepseek" ? ` Get one at <a class="link" data-url="https://platform.deepseek.com/api_keys">platform.deepseek.com</a>.` : "";
+  const hint = fromPi
+    ? `The DeepSeek key of your pi coding agent: ${p.pi_key_available ? `<span class="ok">found</span>` : `<span class="bad">not found</span>`}.`
+    : `Stored only on this PC, in %APPDATA%\\minute.${where}`;
+  return `<div class="setting"><div class="label"><b>API key</b><span>${hint}</span></div>${piChoice}${fromPi ? "" : `<input type="password" data-key="ai_key" placeholder="Paste your key" value="${esc(p.ai_key)}">`}</div>`;
+}
+
 function renderSettings() {
-  const p = prefs, custom = p.ai_key_source === "custom";
-  const piState = p.pi_key_available ? `<span class="ok">found</span>` : `<span class="bad">not found</span>`;
+  const p = prefs, provider = providerOf(p);
   $("settings").innerHTML = `
     <h1>Settings</h1>
     <h2>General</h2>
@@ -831,11 +858,12 @@ function renderSettings() {
       <div class="setting"><div class="label"><b>Name calls with AI</b><span>When a call ends, your notes and the transcript are sent to the model below to write a title. Calls you rename yourself are never touched.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
       <div class="setting"><div class="label"><b>Enhanced notes</b><span>When a call ends, turn your notes and the transcript into structured notes: a summary, the topics, decisions and next steps. Your own notes stay untouched.</span></div>${toggle("ai_enhance", p.ai_enhance)}</div>
       <div class="${p.ai_titles || p.ai_enhance ? "" : "dim"}">
-        <div class="setting"><div class="label"><b>API key</b><span>${custom ? "Your own key, stored in %APPDATA%\\minute." : `DeepSeek key from your pi coding agent: ${piState}.`}</span></div>
-          <div class="seg" id="key-source"><button data-v="pi" class="${custom ? "" : "on"}">From pi</button><button data-v="custom" class="${custom ? "on" : ""}">Custom</button></div></div>
-        ${custom ? `<div class="setting"><div class="label"><b>Key</b></div><input type="password" data-key="ai_key" placeholder="sk-..." value="${esc(p.ai_key)}"></div>` : ""}
-        <div class="setting"><div class="label"><b>Model</b><span>Any OpenAI-compatible chat API works.</span></div><input type="text" data-key="ai_model" value="${esc(p.ai_model)}"></div>
-        <div class="setting"><div class="label"><b>Endpoint</b></div><input type="text" data-key="ai_base_url" value="${esc(p.ai_base_url)}"></div>
+        <div class="setting"><div class="label"><b>Provider</b><span>${providerHint(provider)}</span></div>
+          <div class="seg" id="provider">${PROVIDERS.map(([v, n]) => `<button data-v="${v}" class="${v === provider ? "on" : ""}">${n}</button>`).join("")}</div></div>
+        ${provider === "ollama" ? "" : keyRows(p)}
+        ${provider === "deepseek" ? "" : `
+        <div class="setting"><div class="label"><b>Model</b><span>${provider === "ollama" ? "A model you pulled, as <code>ollama list</code> shows it." : "The model name your provider uses."}</span></div><input type="text" data-key="ai_model" placeholder="${provider === "ollama" ? "qwen3:8b" : "model name"}" value="${esc(p.ai_model)}"></div>
+        <div class="setting"><div class="label"><b>Endpoint</b><span>The address before /chat/completions.</span></div><input type="text" data-key="ai_base_url" value="${esc(p.ai_base_url)}"></div>`}
         <div class="setting"><div class="label"><b>Try it</b><span id="ai-test">Generate a title for a sample note.</span></div><button class="btn-line" id="test-ai">Test</button></div>
       </div>
     </div>
@@ -855,8 +883,12 @@ $("settings").addEventListener("change", (e) => {
   });
 });
 $("settings").addEventListener("click", async (e) => {
+  const prov = e.target.closest("#provider button");
   const seg = e.target.closest("#key-source button");
-  if (seg) {
+  if (prov) {
+    if (prov.dataset.v !== providerOf(prefs)) await saveSetting(PROVIDER_PRESETS[prov.dataset.v]);
+    renderSettings();
+  } else if (seg) {
     await saveSetting({ ai_key_source: seg.dataset.v });
     renderSettings();
   } else if (e.target.closest("#pick-folder")) {
