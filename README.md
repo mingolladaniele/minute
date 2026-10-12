@@ -8,6 +8,10 @@
 
 <p align="center">Open-source meeting notes for Windows.</p>
 
+https://github.com/user-attachments/assets/ff2905ae-c100-4119-8630-8bc437eab4f6
+
+<p align="center"><a href="https://youtu.be/eCSfcGBmGZM">Watch the demo on YouTube</a></p>
+
 - **Your files.** Every call is plain Markdown in a folder you choose. Open it in Obsidian or any editor.
 - **Private.** Transcription runs on your PC, no audio leaves it. With Ollama, nothing does. Open source, so you can check.
 - **Free, no limits.** Every call stays, forever. No account, no sign-up.
