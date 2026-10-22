@@ -17,7 +17,10 @@ meta.json status fields:
 """
 import ctypes
 import json
+import os
+import re
 import shutil
+import unicodedata
 from ctypes import wintypes
 
 from minute import settings, wavfile
@@ -252,6 +255,121 @@ def load_call(call_id):
     return {**read_meta(call_id), "blocks": blocks, "notes": notes_of(call_id),
             "enhanced": enhanced_of(call_id), "has_audio": bool(audio_paths(call_id)),
             "audio": [t for t in TRACKS if (d / f"{t}.wav").exists()]}
+
+
+# --- search --------------------------------------------------------------------
+
+_FOLD = {}  # code point -> its search form, filled in as new characters show up
+_MD_SYNTAX = re.compile(r"(?m)^[ \t]*(?:#+|[-+*]|\d{1,3}\.)[ \t]+|\*\*|`")  # headings, list markers, bold, code
+_INDEX = {}  # call folder -> (file times, texts, folded): a search reads again only the calls that changed
+_INDEXED = ("notes.md", "enhanced.md", "blocks.json", "live.jsonl")
+_FIELDS = ("notes", "enhanced", "transcript")  # the texts _searchable returns, in order
+
+
+def _fold(text):
+    """Lowercase, without accents, a space for any whitespace: "Perché?\\n" -> "perche? ". One character
+    for one character, so a position in the result is the same position in text."""
+    for c in set(text):
+        if ord(c) not in _FOLD:
+            f = "".join(x for x in unicodedata.normalize("NFD", c) if not unicodedata.combining(x)).lower()
+            _FOLD[ord(c)] = " " if c.isspace() else f if len(f) == 1 else c
+    return text.translate(_FOLD)
+
+
+def _plain(md):
+    """Markdown syntax blanked out with spaces, so positions don't move."""
+    return _MD_SYNTAX.sub(lambda m: " " * len(m[0]), md)
+
+
+def _word_start(text):
+    """A pattern for text at the start of a word: "sync" finds "Sync" and "synchronize", not "async"."""
+    return re.compile(r"(?<!\w)" + re.escape(text))
+
+
+def _searchable(d):
+    """A call's [notes, enhanced notes, transcript], plain and folded, kept until one of its files changes."""
+    with os.scandir(d) as files:  # the listing carries each file's time: no stat per file
+        times = {f.name: f.stat().st_mtime_ns for f in files if f.name in _INDEXED}
+    cached = _INDEX.get(d)
+    if cached and cached[0] == times:
+        return cached[1], cached[2]
+    call = load_call(d.name)
+    texts = [unicodedata.normalize("NFC", t) for t in (
+        _plain(call["notes"]), _plain(call["enhanced"]), "\n".join(b["text"] for b in call["blocks"]))]
+    folded = [_fold(t) for t in texts]
+    _INDEX[d] = (times, texts, folded)
+    return texts, folded
+
+
+def _marks(text, folded, patterns, start=0, end=None):
+    """text[start:end] as [piece, bold] pairs, bold where a pattern matches."""
+    end = len(text) if end is None else end
+    out, at = [], start
+    for a, b in sorted(m.span() for p in patterns for m in p.finditer(folded, start, end)):
+        if b <= at:
+            continue  # inside a word already marked
+        a = max(a, at)
+        if a > at:
+            out.append([text[at:a], False])
+        out.append([text[a:b], True])
+        at = b
+    if at < end:
+        out.append([text[at:end], False])
+    return out
+
+
+def _first(folded, words, patterns):
+    """(which text, position): the whole query in the first text that has it, else the earliest word in
+    the first text that has any."""
+    phrase = _word_start(" ".join(words))
+    for i, f in enumerate(folded):
+        if m := phrase.search(f):
+            return i, m.start()
+    for i, f in enumerate(folded):
+        if found := [m.start() for p in patterns if (m := p.search(f))]:
+            return i, min(found)
+    return None
+
+
+def _snippet(text, f, at, patterns, before=40, after=120):
+    """The words around position at, on one line, as [piece, bold] pairs."""
+    start, end = max(0, at - before), min(len(f), at + after)
+    if start and (space := f.find(" ", start, at)) >= 0:
+        start = space + 1  # don't start or end mid-word
+    if end < len(f) and (space := f.rfind(" ", at, end)) > at:
+        end = space
+    out = [[re.sub(r"[ \t]+", " ", re.sub(r"\s*\n\s*", " · ", piece)), bold]
+           for piece, bold in _marks(text, f, patterns, start, end)]
+    out[0][0] = out[0][0].lstrip(" ·")
+    out[-1][0] = out[-1][0].rstrip(" ·")
+    return [["…", False]] * bool(start) + out + [["…", False]] * (end < len(f))
+
+
+def search(query):
+    """Calls with every word of query in their title, notes, enhanced notes or transcript, newest first.
+    Words match from the start of a word, ignoring case and accents. Each hit: {id, title, snippet, field},
+    title and snippet as [piece, bold] pairs; field ("notes", "enhanced", "transcript") is where the snippet
+    comes from. Snippet and field are None when only the title matches. An empty query finds nothing but
+    gets every call read, so the first word typed is fast."""
+    words = _fold(unicodedata.normalize("NFC", query)).split()
+    patterns = [_word_start(w) for w in words]
+    root, hits = settings.recordings_dir(), []
+    for meta in list_calls():
+        try:
+            texts, folded = _searchable(root / meta["id"])
+        except OSError:
+            continue  # deleted meanwhile
+        title = unicodedata.normalize("NFC", meta.get("title") or "")
+        folded_title = _fold(title)
+        # the plain substring test first: it's fast, the word-start pattern only confirms what it finds
+        if words and all(p.search(folded_title) or any(w in f and p.search(f) for f in folded)
+                         for w, p in zip(words, patterns)):
+            hit = {"id": meta["id"], "title": _marks(title, folded_title, patterns), "snippet": None, "field": None}
+            if first := _first(folded, words, patterns):
+                i, at = first
+                hit.update(snippet=_snippet(texts[i], folded[i], at, patterns), field=_FIELDS[i])
+            hits.append(hit)
+    return hits
 
 
 def delete_call(call_id):

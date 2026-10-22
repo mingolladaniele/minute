@@ -112,7 +112,12 @@
   .row:hover .row-more, .row-more.open { opacity: 1; }
   .row-more:hover, .row-more.open { background: color-mix(in srgb, var(--ink) 8%, transparent); color: var(--ink); }
   .row-menu { position: fixed; top: auto; right: auto; min-width: 160px; }
-  .row .title { flex: 1; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .text { flex: 1; min-width: 0; }
+  .row .title, .row .snippet { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .title { font-weight: 500; }
+  .row .title b { font-weight: 700; }
+  .row .snippet { color: var(--muted); font-size: 13px; }
+  .row .snippet b { color: var(--ink); font-weight: 600; }
   .row .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
   .empty { text-align: center; color: var(--muted); padding: 70px 20px; }
   .empty img { width: 56px; height: 56px; margin-bottom: 16px; }
@@ -201,6 +206,7 @@
   .bubble.THEM { align-self: flex-start; background: var(--them); border-bottom-left-radius: 5px; }
   .bubble.YOU { align-self: flex-end; background: color-mix(in srgb, var(--live) 24%, var(--card)); border-bottom-right-radius: 5px; }
   .ghost { color: var(--faint); }
+  ::highlight(found) { background-color: rgba(224, 164, 58, .45); color: var(--ink); }  /* words a search opened the call at */
 
   .naming { color: var(--faint); animation: pulse 1.6s ease-in-out infinite; }
   .row .title.naming { font-weight: 500; }
@@ -387,6 +393,7 @@ const ui = {
   panelOpen: false,
   panelMode: "transcript",  // what the panel above the dock shows: "transcript" | "ask"
   ask: { scope: null, turns: [], busy: false },  // Ask anything chat: scope = a call id, or null for all calls
+  search: { q: "", hits: null },  // the home list filtered by the Ask bar: hits = call id -> {title, snippet}
   naming: new Set(),  // call ids whose AI title is being generated
   enhancing: new Set(),  // call ids whose enhanced notes are being generated
   noteView: "mine",      // "mine" | "enhanced"
@@ -498,28 +505,41 @@ $("row-menu").addEventListener("click", (e) => {
 });
 document.addEventListener("click", (e) => { if (!e.target.closest("#row-menu")) closeRowMenu(); });
 $("scroll").addEventListener("scroll", closeRowMenu);
+const marked = (pieces) => pieces.map(([text, bold]) => bold ? `<b>${esc(text)}</b>` : esc(text)).join("");
+function rowHtml(c, hit) {
+  // a search hit bolds the words found, unless the title changed since the search
+  const title = hit && hit.title.map((p) => p[0]).join("") === c.title ? marked(hit.title) : esc(c.title);
+  return `<button class="row" data-id="${c.id}"><span class="text">
+      <span class="title ${ui.naming.has(c.id) ? "naming" : ""}">${title}${flag(c)}</span>
+      ${hit?.snippet ? `<span class="snippet">${marked(hit.snippet)}</span>` : ""}</span>
+      <span class="meta">${hhmm(c.started)}</span>
+      <span class="row-more" data-more="${c.id}" title="More">${ICON_MORE}</span></button>`;
+}
 function renderHome() {
-  const el = $("home");
+  const el = $("home"), hits = ui.search.hits;
   let html = modelBanner();
-  if (ui.live) {
+  if (ui.live && !hits) {
     html += `<div class="group">Now</div>
       <button class="row live" data-id="live"><span class="rec"></span>
-      <span class="title">${esc(ui.live.title || "New call")}</span><span class="meta">Recording</span></button>`;
+      <span class="text"><span class="title">${esc(ui.live.title || "New call")}</span></span><span class="meta">Recording</span></button>`;
   }
   const groups = new Map();
-  for (const c of ui.calls) {
+  for (const c of hits ? ui.calls.filter((c) => hits.has(c.id)) : ui.calls) {
     const g = day(c.started);
     if (!groups.has(g)) groups.set(g, []);
     groups.get(g).push(c);
   }
   for (const [g, calls] of groups) {
-    const open = groupOpen(g, g === groups.keys().next().value);
-    html += `<button class="group ${open ? "open" : ""}" data-group="${esc(g)}">${ICON_CHEV} ${g} <span>${calls.length}</span></button>`;
-    if (!open) continue;
-    html += calls.map((c) => `<button class="row" data-id="${c.id}">
-      <span class="title ${ui.naming.has(c.id) ? "naming" : ""}">${esc(c.title)}${flag(c)}</span><span class="meta">${hhmm(c.started)}</span>
-      <span class="row-more" data-more="${c.id}" title="More">${ICON_MORE}</span></button>`).join("");
+    if (hits) {
+      html += `<div class="group">${g} <span>${calls.length}</span></div>`;  // searching: every day with a match is open
+    } else {
+      const open = groupOpen(g, g === groups.keys().next().value);
+      html += `<button class="group ${open ? "open" : ""}" data-group="${esc(g)}">${ICON_CHEV} ${g} <span>${calls.length}</span></button>`;
+      if (!open) continue;
+    }
+    html += calls.map((c) => rowHtml(c, hits?.get(c.id))).join("");
   }
+  if (hits && !groups.size) html += `<div class="empty"><p>No calls match. Press Enter to ask.</p></div>`;
   if (!ui.live && !ui.calls.length) {
     html = `${modelBanner()}<div class="empty"><img src="icon.png" alt=""><h2>No calls yet</h2>
       <p>Start a new note when your call begins. minute listens to your mic and your speakers, so it works with Meet, Zoom, Teams and anything else.</p></div>`;
@@ -549,7 +569,7 @@ $("home").addEventListener("click", (e) => {
     return;
   }
   const row = e.target.closest(".row");
-  if (row) row.dataset.id === "live" ? openLive() : openCall(row.dataset.id);
+  if (row) row.dataset.id === "live" ? openLive() : openCall(row.dataset.id, ui.search.hits?.get(row.dataset.id)?.field);
 });
 
 function showHome() {
@@ -560,14 +580,17 @@ function showHome() {
   $("note").classList.add("hidden");
   $("settings").classList.add("hidden");
   $("menu").classList.add("hidden");
+  $("ask").value = ui.search.q;  // back from a call: the search you left is still there
   renderHome();
   renderTopbar();
   renderDock();
+  if (ui.search.q) runSearch();  // the calls may have changed meanwhile
 }
 
 /* --- note --- */
 function showNote() {
   ui.view = "note";
+  $("ask").value = "";  // the search stays with the home page
   $("home").classList.add("hidden");
   $("settings").classList.add("hidden");
   $("note").classList.remove("hidden");
@@ -576,11 +599,16 @@ function showNote() {
   renderTopbar();
   renderDock();
 }
-async function openCall(id) {
+async function openCall(id, found = null) {
+  // found: "notes" | "enhanced" | "transcript" when opened from a search: the call opens where the words are
   ui.call = await api().get_call(id);
-  ui.noteView = ui.call.enhanced ? "enhanced" : "mine";
-  ui.panelOpen = false;
+  ui.noteView = found === "notes" || !ui.call.enhanced ? "mine" : "enhanced";
+  ui.panelOpen = found === "transcript";
+  ui.panelMode = "transcript";
   showNote();
+  CSS.highlights.delete("found");
+  if (found === "transcript") reveal($("panel").querySelectorAll(".bubble"), ui.search.q, $("panel"));
+  else if (found) reveal([$("notes")], ui.search.q, $("scroll"));
 }
 function openLive() {
   ui.call = null;
@@ -790,7 +818,7 @@ function renderDock() {
   const show = ui.view === "note" || ui.view === "home";
   $("dock").classList.toggle("hidden", !show);
   $("dock-toggle").classList.toggle("hidden", ui.view !== "note");
-  $("ask").placeholder = ui.view === "note" ? "Ask about this call" : "Ask about your calls";
+  $("ask").placeholder = ui.view === "note" ? "Ask about this call" : "Search or ask about your calls";
   $("dock").classList.toggle("live", viewingLive() && ui.state === "recording");
   $("dock").classList.toggle("open", ui.panelOpen && ui.panelMode === "transcript");
   $("dock-stop").classList.toggle("hidden", !(viewingLive() && ui.state === "recording"));
@@ -848,6 +876,66 @@ function renderAsk() {
     $("ask").focus();
   });
 }
+/* --- search: on the home page the Ask bar filters the calls as you type; Enter still asks --- */
+let searchTimer = null, searchSeq = 0;
+async function runSearch() {
+  const q = $("ask").value.trim(), seq = ++searchSeq;
+  const hits = q ? await api().search(q) : null;
+  if (seq !== searchSeq || ui.view !== "home") return;  // a newer search, or the user left the page
+  ui.search = { q, hits: hits && new Map(hits.map((h) => [h.id, h])) };
+  renderHome();
+}
+function clearSearch() {
+  clearTimeout(searchTimer);
+  searchSeq++;  // a search still on its way is dropped
+  ui.search = { q: "", hits: null };
+}
+$("ask").addEventListener("input", () => {
+  if (ui.view !== "home") return;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 80);
+});
+$("ask").addEventListener("focus", () => { if (ui.view === "home") api().search(""); });  // reads the calls ahead
+
+// Lowercase, without accents, one character for one character, as storage._fold: positions stay the text's.
+const FOLDED = new Map();
+function fold(s) {
+  return s.replace(/[^]/g, (c) => {
+    if (!FOLDED.has(c)) {
+      const f = c.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+      FOLDED.set(c, /\s/.test(c) ? " " : f.length === 1 ? f : c);
+    }
+    return FOLDED.get(c);
+  });
+}
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// Highlights where the search words first are in these elements and scrolls them to mid-view: the whole
+// query first, else the earliest word, the place storage._first takes the snippet from.
+function reveal(elements, q, scroller) {
+  const words = fold(q).split(" ").filter(Boolean);
+  const atWordStart = (w) => new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRe(w)}`, "u");
+  const nodes = [];
+  for (const el of elements) {
+    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    while (walk.nextNode()) nodes.push(walk.currentNode);
+  }
+  const first = (patterns) => {
+    for (const node of nodes) {
+      const text = fold(node.data);
+      const m = patterns.map((p) => p.exec(text)).filter(Boolean).sort((a, b) => a.index - b.index)[0];
+      if (m) return { node, start: m.index, end: m.index + m[0].length };
+    }
+  };
+  const hit = words.length && (first([atWordStart(words.join(" "))]) || first(words.map(atWordStart)));
+  if (!hit) return;
+  const range = new Range();
+  range.setStart(hit.node, hit.start);
+  range.setEnd(hit.node, hit.end);
+  CSS.highlights.set("found", new Highlight(range));  // drawn over the text: the notes themselves are untouched
+  const r = range.getBoundingClientRect(), box = scroller.getBoundingClientRect();
+  scroller.scrollTop += r.top - box.top - box.height / 2;  // the words, not their bubble: one can be a long monologue
+}
+
 $("ask-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const q = $("ask").value.trim();
@@ -860,6 +948,7 @@ $("ask-form").addEventListener("submit", async (e) => {
   chat.turns.push(turn);
   chat.busy = true;
   $("ask").value = "";
+  if (ui.view === "home") { clearSearch(); renderHome(); }  // the bar is empty again: so is the filter
   ui.panelMode = "ask";
   ui.panelOpen = true;
   renderDock();
@@ -871,7 +960,9 @@ $("ask-form").addEventListener("submit", async (e) => {
 });
 $("dock-stop").addEventListener("click", () => api().stop());
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && ui.panelOpen) { ui.panelOpen = false; renderDock(); }
+  if (e.key !== "Escape") return;
+  if (ui.view === "home" && $("ask").value) { $("ask").value = ""; clearSearch(); renderHome(); }
+  else if (ui.panelOpen) { ui.panelOpen = false; renderDock(); }
 });
 function setWave(level) {
   [...$("wave").children].forEach((b, i) => {
@@ -965,6 +1056,7 @@ function aboutHtml() {
 
 async function showSettings() {
   ui.view = "settings";
+  $("ask").value = "";
   ui.call = null;
   ui.panelOpen = false;
   $("home").classList.add("hidden");

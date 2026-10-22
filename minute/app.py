@@ -35,6 +35,9 @@ class Api:
     def get_call(self, call_id):
         return storage.load_call(call_id)
 
+    def search(self, query):
+        return storage.search(query)
+
     def rename_call(self, call_id, title):
         storage.rename_call(call_id, title)
 

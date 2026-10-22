@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.5 (2026-10-22)
+
+- Search your calls from the Ask bar: on the home page the list narrows as you type to the calls with every word you typed in their title, your notes, the enhanced notes or the transcript. Case and accents don't matter, and each result shows the words in context, in bold
+- Click a result and the call opens where the words are, highlighted: in your notes, the enhanced notes or the transcript
+- Enter still asks about your calls. Esc or an empty bar brings the whole list back, and Back from a call returns to your search
+
 ## 0.3.4 (2026-10-11)
 
 - Pick your microphone in Settings > Recordings: Windows default (as before) or a specific mic, used whenever it's connected; if it isn't, minute falls back to the Windows default
