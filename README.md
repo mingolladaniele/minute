@@ -6,7 +6,7 @@
 
 <p align="center"><b>minute turns every call into notes on your own PC: free, no account, no bot, and plain files you keep forever.</b></p>
 
-<p align="center">Open-source meeting notes for Windows.</p>
+<p align="center">The open-source alternative to Granola: meeting notes for Windows.</p>
 
 https://github.com/user-attachments/assets/ff2905ae-c100-4119-8630-8bc437eab4f6
 
@@ -19,6 +19,7 @@ https://github.com/user-attachments/assets/ff2905ae-c100-4119-8630-8bc437eab4f6
 - **Your AI.** DeepSeek, Ollama offline, or any OpenAI-compatible API.
 - **Any call app.** Meet, Zoom, Teams, Slack, WhatsApp. Starts when a call takes the mic, stops when it ends. No bot joins.
 - **Your notes, enriched.** Write what matters, minute completes it with the transcript: summary, decisions, next steps.
+- **Search.** Type a word and the list shows the calls that have it, in context. Click one to land on the words, in the notes or the transcript.
 - **Ask.** Questions about one call or all of them, with links to the calls it used.
 - **32 languages**, detected on their own, even when a call switches language.
 
