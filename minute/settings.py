@@ -60,6 +60,7 @@ DEFAULTS = {
     # "custom": ai_key below; "" (never chosen): pi when its key exists, else custom
     "ai_key_source": "",
     "ai_key": "",
+    "pill_pos": None,  # [x, y] of the recording pill after a drag, physical px; None = top centre
 }
 
 

@@ -112,6 +112,11 @@ def on_stop_button(x, y, w, h, scale):
     return (x - MARK_X * scale) ** 2 + (y - h / 2) ** 2 <= r * r
 
 
+def clamp_position(x, y, w, h, screen_w, screen_h):
+    """Keep the whole pill on the primary screen (a saved spot may be on a monitor that is gone)."""
+    return max(0, min(x, screen_w - w)), max(0, min(y, screen_h - h))
+
+
 class Indicator:
     def __init__(self, on_click, on_stop, position=None, on_moved=None):
         self.on_click = on_click
@@ -171,7 +176,8 @@ class Indicator:
         self.hwnd = user32.CreateWindowExW(ex, "MinuteIndicator", "minute indicator", WS_POPUP,
                                            0, 0, self.w, self.h, None, None, hinst, None)
         if self.position:
-            self.x, self.y = self.position
+            self.x, self.y = clamp_position(*self.position, self.w, self.h,
+                                            user32.GetSystemMetrics(SM_CXSCREEN), user32.GetSystemMetrics(SM_CYSCREEN))
         else:
             self.x, self.y = default_position(user32.GetSystemMetrics(SM_CXSCREEN), self.w, s)
         self._ready.set()

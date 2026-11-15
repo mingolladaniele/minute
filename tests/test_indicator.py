@@ -28,3 +28,9 @@ def test_release_after_drag_does_nothing():
     pill._release(61, 15)
     pill._release(17, 15)
     assert calls[1:] == ["stop", "click"]
+
+
+def test_clamp_offscreen_position():
+    assert ind.clamp_position(2500, -40, 78, 30, 1920, 1080) == (1842, 0)
+    assert ind.clamp_position(-10, 2000, 78, 30, 1920, 1080) == (0, 1050)
+    assert ind.clamp_position(300, 200, 78, 30, 1920, 1080) == (300, 200)

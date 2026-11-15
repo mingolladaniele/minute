@@ -317,7 +317,9 @@ class App:
             width=880, height=760, min_size=(560, 480), background_color="#F7F6F1",
         )
         self.main.events.closing += self._on_main_closing
-        self.indicator = Indicator(on_click=self.show_main, on_stop=lambda: self.stop("pill"))
+        self.indicator = Indicator(on_click=self.show_main, on_stop=lambda: self.stop("pill"),
+                                   position=settings.load()["pill_pos"],
+                                   on_moved=lambda x, y: settings.save({"pill_pos": [x, y]}))
         self._build_tray()
         storage.recover_interrupted()  # calls cut short by a crash or power loss
         threading.Thread(target=self._unload_when_idle, name="minute-unload", daemon=True).start()
