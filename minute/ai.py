@@ -31,6 +31,9 @@ def _http_reason(e):
     return f"{reason} ({detail[:120]})" if detail else reason
 
 
+# Tokens a reasoning model may spend thinking, on top of the ones asked for the answer: on a 47-minute call
+# "medium" thought for 14k before writing a word.
+THINKING_ROOM = {"medium": 20000, "high": 40000}
 CUT = "[... part of the call left out here for length ...]"  # says what it is, so the model doesn't take it as silence
 
 
@@ -78,6 +81,7 @@ def chat(system, user, max_tokens, timeout=60, history=(), json_mode=False, reas
         body["response_format"] = {"type": "json_object"}
     if "deepseek.com" in values["ai_base_url"]:
         body["reasoning_effort"] = reasoning  # other providers may reject the field
+        body["max_tokens"] += THINKING_ROOM.get(reasoning, 0)
     headers = {"Content-Type": "application/json"}
     if key:
         headers["Authorization"] = f"Bearer {key}"
@@ -96,6 +100,8 @@ def chat(system, user, max_tokens, timeout=60, history=(), json_mode=False, reas
         raise AIError(f"cannot reach {values['ai_base_url']}: {getattr(e, 'reason', e)}") from e
     choice = reply["choices"][0]
     if choice.get("finish_reason") == "length" and not (choice["message"].get("content") or "").strip():
+        if body.get("reasoning_effort") in THINKING_ROOM:  # it thought until the tokens ran out: once more, thinking less
+            return chat(system, user, max_tokens, timeout, history, json_mode, reasoning="low")
         raise AIError("the model ran out of tokens before answering")
     return choice["message"].get("content") or ""
 
