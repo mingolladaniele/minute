@@ -164,8 +164,8 @@
   }
   .dock-main { height: 32px; padding: 0 12px 0 10px; border-radius: 999px; display: flex; align-items: center; gap: 10px; }
   .dock-main:hover { background: var(--hover); }
-  .dock-stop { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; }
-  .dock-stop span { width: 10px; height: 10px; border-radius: 2px; background: var(--ink); }
+  .dock-stop { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; margin-left: 6px; box-shadow: inset 0 0 0 1.5px var(--rec); }
+  .dock-stop span { width: 10px; height: 10px; border-radius: 2px; background: var(--rec); }
   .dock-stop:hover { background: var(--rec); }
   .dock-stop:hover span { background: #fff; }
   .dock .wave { display: flex; align-items: center; gap: 2px; height: 16px; }
@@ -175,7 +175,7 @@
   .dock.open .chev { transform: rotate(180deg); }
   .panel {
     position: fixed; left: 50%; bottom: 76px; transform: translateX(-50%); z-index: 9;
-    width: min(640px, calc(100% - 48px)); max-height: 58vh; overflow-y: auto;
+    width: min(640px, calc(100% - 48px)); max-height: 34vh; overflow-y: auto;
     background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
     padding: 18px 22px;
   }
@@ -218,7 +218,17 @@
 
   .naming { color: var(--faint); animation: pulse 1.6s ease-in-out infinite; }
   .row .title.naming { font-weight: 500; }
-  .note-title.naming::after { content: "Naming with AI…"; display: block; margin-top: 6px; font: 400 14px var(--sans); color: var(--faint); }
+  .note-title.naming { color: var(--muted); animation: none; }
+
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-button { display: none; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+  .scroll:hover::-webkit-scrollbar-thumb, .panel:hover::-webkit-scrollbar-thumb { background: var(--line); }
+  body::after {  /* the list fades out under the floating search bar instead of running behind it */
+    content: ""; position: fixed; left: 0; right: 0; bottom: 0; height: 96px; pointer-events: none; z-index: 8;  /* under the Ask panel (9) and the bar (10) */
+    background: linear-gradient(to bottom, transparent, var(--bg) 62%);
+  }
 
   /* --- banner (model download) --- */
   .banner {
@@ -377,8 +387,8 @@
     <span>Transcript</span>
     <svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="m3 7.5 3-3 3 3"/></svg>
   </button>
-  <button class="dock-stop hidden" id="dock-stop" title="Stop recording"><span></span></button>
   <form class="dock-ask" id="ask-form"><input id="ask" autocomplete="off" spellcheck="false" placeholder="Ask anything"></form>
+  <button class="dock-stop hidden" id="dock-stop" title="Stop recording"><span></span></button>
 </div>
 <div class="toast hidden" id="toast"></div>
 
