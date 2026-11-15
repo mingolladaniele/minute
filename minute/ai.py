@@ -3,6 +3,7 @@ through Ollama), shared by titles and notes."""
 import json
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 
 from pydantic import ValidationError
 
@@ -29,6 +30,34 @@ def _http_reason(e):
         detail = ""
     reason = HTTP_REASONS.get(e.code) or ("the AI service is down" if e.code >= 500 else f"HTTP {e.code}")
     return f"{reason} ({detail[:120]})" if detail else reason
+
+
+# Errors the user fixes in Settings, and the sentence shown for each ({provider} is filled in).
+SETTINGS_FIXES = {
+    HTTP_REASONS[401]: "{provider} rejected the API key.",
+    HTTP_REASONS[403]: "{provider} doesn't allow this API key to use the model.",
+    "no API key": "No API key is set.",
+    "no endpoint": "No AI provider address is set.",
+    "no model chosen": "No AI model is chosen.",
+}
+PROVIDERS = {"deepseek": "DeepSeek", "openai": "OpenAI", "openrouter": "OpenRouter", "anthropic": "Anthropic"}
+
+
+def _provider(base_url):
+    host = urlparse(base_url).hostname or base_url
+    if host in ("localhost", "127.0.0.1", "::1"):
+        return "The local model"
+    return next((name for key, name in PROVIDERS.items() if key in host), host)
+
+
+def describe(error, base_url):
+    """An AI error as (one sentence a person can act on, "settings" | "retry"), without the provider's raw text."""
+    reason = error.split(" (", 1)[0].strip()
+    for start, sentence in SETTINGS_FIXES.items():
+        if reason.startswith(start):
+            return sentence.format(provider=_provider(base_url)), "settings"
+    reason = reason[:1].upper() + reason[1:]
+    return reason if reason.endswith((".", "?", "!")) else reason + ".", "retry"
 
 
 # Tokens a reasoning model may spend thinking, on top of the ones asked for the answer: on a 47-minute call

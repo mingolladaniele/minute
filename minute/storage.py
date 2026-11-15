@@ -212,6 +212,7 @@ def save_enhanced(call_id, text, source="user"):
     meta = read_meta(call_id)
     meta.update(enhanced_status="done")
     meta.pop("enhanced_error", None)
+    meta.pop("enhanced_fix", None)
     if source == "user":
         meta["enhanced_edited"] = True
     _write_meta(call_id, meta)

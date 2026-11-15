@@ -287,6 +287,7 @@
   .status .grow { flex: 1; }
   .status .btn-line { height: 30px; font-size: 13px; }
   .row .flag { color: var(--faint); font-size: 12px; margin-left: 10px; font-weight: 500; }
+  .row .flag.failed { color: #e0a43a; }
   .chip.audio-only { color: var(--muted); }
   .chip.ending { color: var(--ink); }
   .chip.ending i { width: 7px; height: 7px; border-radius: 50%; background: #e0a43a; }
@@ -665,7 +666,7 @@ $("views").addEventListener("click", (e) => {
 function flag(c) {
   if (c.transcript === "pending") return `<span class="flag">${ui.transcribing === c.id ? "Transcribing…" : "Transcript pending"}</span>`;
   if (ui.enhancing.has(c.id)) return `<span class="flag">Enhancing…</span>`;
-  if (c.enhanced_status === "pending" && c.enhanced_error) return `<span class="flag">Notes pending</span>`;
+  if (c.enhanced_status === "pending" && c.enhanced_error) return `<span class="flag failed">Notes failed</span>`;
   if (c.title_status === "pending" && c.title_error) return `<span class="flag">Title pending</span>`;
   return "";
 }
@@ -679,8 +680,9 @@ function renderStatus() {
       ${c.audio?.length ? `<button class="btn-line" data-raw="folder">Open audio</button>` : ""}
       ${doing ? "" : `<button class="btn-line" data-retry="${c.id}">Retry now</button>`}`;
   } else if (c && c.enhanced_status === "pending" && c.enhanced_error && !ui.enhancing.has(c.id)) {
-    html = `<div class="grow"><b>Enhanced notes not generated yet</b><br>${esc(c.enhanced_error)}. Your notes and the transcript are safe; minute retries every few minutes.</div>
-      <button class="btn-line" data-retry="${c.id}">Retry now</button>`;
+    html = `<div class="grow"><b>Enhanced notes not generated</b><br>${esc(c.enhanced_error)}</div>
+      ${c.enhanced_fix === "settings" ? `<button class="btn-line" data-settings>Open Settings</button>`
+        : `<button class="btn-line" data-retry="${c.id}">Retry now</button>`}`;
   } else if (c && c.title_status === "pending" && c.title_error) {
     html = `<div class="grow"><b>AI title not generated yet</b><br>${esc(c.title_error)}. minute retries every few minutes.</div>
       <button class="btn-line" data-retry="${c.id}">Retry now</button>`;
@@ -689,6 +691,7 @@ function renderStatus() {
   el.classList.toggle("hidden", !html);
 }
 $("status").addEventListener("click", (e) => {
+  if (e.target.closest("[data-settings]")) return showSettings();
   const b = e.target.closest("[data-retry]");
   if (b) { api().retry(b.dataset.retry); b.disabled = true; b.textContent = "Retrying…"; }
 });

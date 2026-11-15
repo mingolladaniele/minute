@@ -9,7 +9,7 @@ Steps back as soon as a recording starts: the model can only compute one thing a
 """
 import threading
 
-from minute import enhance, settings, storage, titles, wavfile
+from minute import ai, enhance, settings, storage, titles, wavfile
 from minute.capture import TARGET_RATE
 from minute.recorder import ModelMissing
 
@@ -93,7 +93,8 @@ class Worker:
             enhance.enhance_call(call_id)
             self.on_event({"type": "enhanced", "call_id": call_id})
         except Exception as e:  # same as titles: keep everything, retry later
-            storage.update_meta(call_id, enhanced_status="pending", enhanced_error=str(e))
+            sentence, fix = ai.describe(str(e), settings.load()["ai_base_url"])
+            storage.update_meta(call_id, enhanced_status="pending", enhanced_error=sentence, enhanced_fix=fix)
             self.on_event({"type": "enhanced", "call_id": call_id, "error": str(e)})
 
     def _title(self, call_id):
