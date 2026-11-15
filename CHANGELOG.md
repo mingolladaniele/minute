@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.7 (2026-11-16)
+
+- The recording pill is now horizontal and floats at the top centre of the screen. Hover it to see the stop button: only the red button stops, a click anywhere else opens minute, and you can drag it where you like, it remembers the spot
+- The stop button sits at the right end of the bottom bar, away from Transcript, so a click aimed at the transcript can't end the recording
+- Ask answers take about a third of the window and scroll inside, so your notes stay readable above them
+- While the AI names a call, the temporary title is readable instead of almost invisible
+- The scrollbar shows only when you hover, and the list fades out under the search bar instead of hiding the last call behind it
+- When the enhanced notes fail, the call says "Notes failed" in the list and the note says what went wrong in one sentence, with "Open Settings" when the API key or the AI settings are the problem
+- Fixed: a few misheard words on a near-silent call could give the call a title in the wrong language. A very short transcript no longer decides the title, your notes do
+- Fixed: on a scaled display (125%, 150%) the pill could sit off centre
+- Known issue: on recent Windows 11 builds minute may not start recording on its own when a call begins. Start it with New note until it's fixed
+
 ## 0.3.6 (2026-11-15)
 
 - Every decision and next step in the enhanced notes ends with the time it was said, like [12:34]: click it and the transcript opens at that line, highlighted for a moment, so you can check who agreed to what
