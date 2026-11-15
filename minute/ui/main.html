@@ -182,6 +182,7 @@
   .panel h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; }
   .panel h3 button { color: var(--muted); font-size: 13px; font-weight: 500; }
   .panel h3 .raw { display: flex; gap: 12px; }
+  .panel h3.pinned { position: sticky; top: -18px; z-index: 1; margin: -18px 0 8px; padding: 18px 0 8px; background: var(--card); }  /* Back to answer stays in reach */
   .menu .label { padding: 8px 12px 4px; font-size: 11.5px; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; }
   .panel h3 button:hover { color: var(--ink); }
   .talk { display: flex; flex-direction: column; gap: 5px; }
@@ -207,6 +208,13 @@
   .bubble.YOU { align-self: flex-end; background: color-mix(in srgb, var(--live) 24%, var(--card)); border-bottom-right-radius: 5px; }
   .ghost { color: var(--faint); }
   ::highlight(found) { background-color: rgba(224, 164, 58, .45); color: var(--ink); }  /* words a search opened the call at */
+  .time {
+    padding: 1px 6px; border-radius: 999px; background: var(--hover); color: var(--muted);
+    font-size: .8em; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer;
+  }
+  .time:hover { color: var(--ink); }
+  .bubble.flash { animation: flash 2.4s ease-out; }  /* the line a time opened the transcript at */
+  @keyframes flash { 0%, 50% { box-shadow: 0 0 0 3px rgba(224, 164, 58, .8); } }
 
   .naming { color: var(--faint); animation: pulse 1.6s ease-in-out infinite; }
   .row .title.naming { font-weight: 500; }
@@ -392,6 +400,7 @@ const ui = {
   groups: {},         // day group label -> open (true) / closed (false), when the user toggled it
   panelOpen: false,
   panelMode: "transcript",  // what the panel above the dock shows: "transcript" | "ask"
+  fromAnswer: false,  // the transcript was opened by a time in an answer: it offers the way back
   ask: { scope: null, turns: [], busy: false },  // Ask anything chat: scope = a call id, or null for all calls
   search: { q: "", hits: null },  // the home list filtered by the Ask bar: hits = call id -> {title, snippet}
   naming: new Set(),  // call ids whose AI title is being generated
@@ -418,6 +427,7 @@ setInterval(() => {
   if (ui.view === "home") renderHome();
 }, 60000);
 const hhmm = (iso) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+const secs = (t) => t.split(":").reduce((a, n) => a * 60 + Number(n), 0);  // "mm:ss" in the call -> seconds
 
 function toast(msg, error = false, action = null) {
   // action: {label, run, ms}: a button in the toast, shown for ms
@@ -605,6 +615,7 @@ async function openCall(id, found = null) {
   ui.noteView = found === "notes" || !ui.call.enhanced ? "mine" : "enhanced";
   ui.panelOpen = found === "transcript";
   ui.panelMode = "transcript";
+  ui.fromAnswer = false;
   showNote();
   CSS.highlights.delete("found");
   if (found === "transcript") reveal($("panel").querySelectorAll(".bubble"), ui.search.q, $("panel"));
@@ -802,7 +813,6 @@ function blocksHtml(blocks, tentative) {
     if (last && last.label === label) last.ghost = t;
     else out.push({ label, t: "", text: "", ghost: t });
   }
-  const secs = (t) => t.split(":").reduce((a, n) => a * 60 + Number(n), 0);
   let shown = -Infinity;
   const html = out.map((b) => {
     let stamp = "";
@@ -810,7 +820,7 @@ function blocksHtml(blocks, tentative) {
       shown = secs(b.t);
       stamp = `<div class="stamp">${b.t}</div>`;
     }
-    return `${stamp}<div class="bubble ${b.label}">${esc(b.text.trim())}${b.ghost ? `${b.text.trim() ? " " : ""}<span class="ghost">${esc(b.ghost)}</span>` : ""}</div>`;
+    return `${stamp}<div class="bubble ${b.label}"${b.t ? ` data-t="${b.t}"` : ""}>${esc(b.text.trim())}${b.ghost ? `${b.text.trim() ? " " : ""}<span class="ghost">${esc(b.ghost)}</span>` : ""}</div>`;
   }).join("");
   return html ? `<div class="talk">${html}</div>` : "";
 }
@@ -835,36 +845,64 @@ function renderPanel() {
   const empty = live
     ? (ui.live.off ? `Live text is unavailable (${esc(ui.live.off)}). The audio is being saved and will be transcribed later.` : "Listening. Text appears here as people speak.")
     : (ui.call?.transcript === "pending" ? "The transcript isn't ready yet." : "Nothing was transcribed.");
-  const raw = live ? "" : `<span class="raw">
+  const back = ui.fromAnswer ? `<button id="to-answer">Back to answer</button>` : "";
+  const raw = live ? (back && `<span class="raw">${back}</span>`) : `<span class="raw">${back}
       ${(ui.call?.audio || []).map((t) => `<button data-raw="${t}">${t === "them" ? "Their audio" : "My audio"}</button>`).join("")}
       <button data-raw="text">Raw text</button><button data-raw="folder">Folder</button>
       <button id="copy-tr">Copy</button></span>`;
-  p.innerHTML = `<h3>Transcript ${raw}</h3>${body || `<p class="ghost">${empty}</p>`}`;
+  p.innerHTML = `<h3${back ? ' class="pinned"' : ""}>Transcript ${raw}</h3>${body || `<p class="ghost">${empty}</p>`}`;
   if (live && atBottom) p.scrollTop = p.scrollHeight;
   $("copy-tr")?.addEventListener("click", async () => {
     await navigator.clipboard.writeText(blocks.map((b) => `${b.label} ${b.t}\n${b.text}`).join("\n\n"));
     toast("Transcript copied");
   });
+  $("to-answer")?.addEventListener("click", () => {
+    ui.fromAnswer = false;
+    ui.panelMode = "ask";
+    renderDock();
+  });
 }
 $("dock-toggle").addEventListener("click", () => {
   ui.panelOpen = !(ui.panelOpen && ui.panelMode === "transcript");
   ui.panelMode = "transcript";
+  ui.fromAnswer = false;
   renderDock();
 });
+// A time [mm:ss] in the notes or in an answer: the transcript opens at the line it falls in, flashed.
+async function showMoment(id, t, fromAnswer) {
+  if (!(ui.view === "note" && (ui.call ? ui.call.id === id : ui.live?.id === id))) await openCall(id);
+  ui.fromAnswer = fromAnswer && ui.ask.turns.length > 0;
+  ui.panelOpen = true;
+  ui.panelMode = "transcript";
+  renderDock();
+  const p = $("panel"), bubbles = [...p.querySelectorAll(".bubble[data-t]")], at = (b) => secs(b.dataset.t);
+  const before = bubbles.filter((b) => at(b) <= secs(t));
+  const line = before.reduce((a, b) => (at(b) > at(a) ? b : a), before[0]) || bubbles[0];  // the latest start, first of a tie
+  if (!line) return;
+  const r = line.getBoundingClientRect(), box = p.getBoundingClientRect();
+  p.scrollTop += r.top - box.top - Math.max(48, (box.height - r.height) / 2);  // a short line mid-view, a long one from its start
+  line.classList.add("flash");
+}
 
 /* --- ask anything --- */
 function askScope() {
   return ui.view === "note" ? (ui.call?.id || ui.live?.id || null) : null;
 }
-function answerHtml(md) {
-  // [Title](call:ID) links to a call; anything else stays plain text
-  return NoteEditor.mdToHtml(md).replace(/\[([^\]]+)\]\(call:([\w-]+)\)/g,
-    (m, title, id) => ui.calls.some((c) => c.id === id) ? `<a class="link" data-call="${id}">${title}</a>` : title);
+function answerHtml(md, scope) {
+  // [Title](call:ID) links to a call; anything else stays plain text. A time links to the transcript of the
+  // call asked about, or in an answer about all calls of the last call named before it (none: plain text).
+  let of = scope;
+  return NoteEditor.mdToHtml(md).replace(/\[([^\]]+)\]\(call:([\w-]+)\)|<a class="time" data-time="([\d:]+)"[^>]*>[^<]*<\/a>/g, (m, title, id, t) => {
+    if (t) return of ? m.replace('class="time"', `class="time" data-of="${of}"`) : `[${t}]`;
+    if (!ui.calls.some((c) => c.id === id)) return title;
+    of = id;
+    return `<a class="link" data-call="${id}">${title}</a>`;
+  });
 }
 function renderAsk() {
   const p = $("panel"), chat = ui.ask;
   const turns = chat.turns.map((t) => `<div class="q">${esc(t.q)}</div>` + (
-    t.a ? `<div class="a">${answerHtml(t.a)}</div>`
+    t.a ? `<div class="a">${answerHtml(t.a, chat.scope)}</div>`
       : t.error ? `<div class="a"><span class="bad">${esc(t.error)}</span></div>`
         : `<div class="a ghost">Thinking…</div>`)).join("");
   p.innerHTML = `<h3>${chat.scope ? "This call" : "All your calls"} <span class="raw"><button id="ask-new">New chat</button></span></h3><div class="chat">${turns}</div>`;
@@ -1181,6 +1219,9 @@ $("settings").addEventListener("click", async (e) => {
 document.addEventListener("click", (e) => {
   const link = e.target.closest("[data-url]");
   if (link) { e.preventDefault(); api().open_url(link.dataset.url); return; }
+  const time = e.target.closest("[data-time]");
+  const timeOf = time && (time.dataset.of || (time.closest("#notes") && currentId()));
+  if (timeOf) { e.preventDefault(); showMoment(timeOf, time.dataset.time, !!time.closest("#panel")); return; }
   const callLink = e.target.closest("[data-call]");
   if (callLink) { e.preventDefault(); openCall(callLink.dataset.call); return; }
   const b = e.target.closest("[data-raw]");

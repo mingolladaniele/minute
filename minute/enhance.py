@@ -4,11 +4,15 @@ Prompt design draws on what open-source note takers do well (Anarlog, formerly H
 both MIT): tell the model its inputs are imperfect, treat the transcript as data, honour what the
 user emphasised, avoid boilerplate sections, keep technical terms as they are.
 """
+import re
+
 from minute import ai, settings, storage
 
 MAX_TRANSCRIPT_CHARS = 200_000  # roughly a 3-hour call; the model's context is far larger
 SHORT_TRANSCRIPT_CHARS = 1500  # about a minute or two of talk: a line of notes, not a structure
 SHORT_NOTES_CHARS = 300
+TIME = re.compile(r" ?\[(\d{1,3}):([0-5]\d)\](?!\()")  # a [mm:ss] in the notes, not the text of a Markdown link
+TIME_OF_BLOCK = re.compile(r"\d{1,3}:[0-5]\d")
 SYSTEM = """You write meeting notes from the user's own rough notes (<notes>, when they wrote any) and the call \
 transcript (<transcript>).
 
@@ -41,11 +45,15 @@ date fixed, settled in the call itself. Something discussed, to look into, only 
 opinion is not: write it as an idea or an open question under its topic, never as "we will" or "agreed". Never \
 write that nothing was decided.
 - If decisions were made, a decisions section. If someone took work on, end with a next steps section of \
-"- **Owner**: task (by when)", the task as an instruction ("Send the quote"). Only work somebody accepted, \
-only owners and dates that were said: the owner is "you" or a person named in the call, never THEM and \
-never guessed from who spoke; with no named owner, write "- task (by when)". Relative dates ("Friday", \
-"tomorrow") count from the day of the call. Every heading and word you write, these included, is in that \
-same output language.
+"- **Owner**: task (by when) [mm:ss]", the task as an instruction ("Send the quote"). Only work somebody \
+accepted, only owners and dates that were said: the owner is "you" or a person named in the call, never THEM \
+and never guessed from who spoke; with no named owner, write "- task (by when) [mm:ss]". Relative dates \
+("Friday", "tomorrow") count from the day of the call. Every heading and word you write, these included, is \
+in that same output language.
+- End every decision and every next step with one time: the [mm:ss] of the transcript line where it was \
+settled, copied from that line, for example "- **Sara**: Send the revised quote (by Friday) [12:34]". One \
+that comes only from the user's notes gets none. No times anywhere else: not in the opening sentences, not \
+in the topic bullets.
 - Keep technical terms and product names in their usual form, often English, even in other languages.
 - Use **bold** only for the few things that matter most.
 
@@ -60,6 +68,28 @@ def _clean(md):
         md = md.split("\n", 1)[1] if "\n" in md else ""
         md = md.rsplit("```", 1)[0]
     return md.strip()
+
+
+def _secs(t):
+    m, s = t.split(":")
+    return int(m) * 60 + int(s)
+
+
+def _check_times(md, call):
+    """The model's [mm:ss] times, checked against the call: a time past its end goes, the others move to the
+    start of the transcript block they fall in, the line the app opens at. A transcript with a single time
+    (one block, or an import without timing) gets none: every link would land on the same line."""
+    starts = sorted({(_secs(b["t"]), b["t"]) for b in call["blocks"] if TIME_OF_BLOCK.fullmatch(b.get("t", ""))})
+    end = max([call.get("duration") or 0] + [s for s, _ in starts])
+
+    def fix(m):
+        secs = int(m[1]) * 60 + int(m[2])
+        if len(starts) < 2 or secs > end:
+            return ""
+        t = max((st for st in starts if st[0] <= secs), default=starts[0])[1]
+        return f"{' ' if m[0].startswith(' ') else ''}[{t}]"
+
+    return re.sub(r"(\[\d+:\d\d\])(?: \1)+", r"\1", TIME.sub(fix, md))  # two times that became one
 
 
 def generate(call):
@@ -77,8 +107,9 @@ def generate(call):
         about.append("This call is short: write one to three sentences or a few bullets, with no ### sections, "
                      "only what was said: nothing about what wasn't decided, planned or specified.")
     user = "\n".join(about) + "\n\n" + ai.notes_and_transcript(notes, transcript)
-    return _clean(ai.chat(SYSTEM, user, max_tokens=12000, timeout=180,
-                          reasoning="medium")) or None  # runs once per call, in the background: worth the thought
+    md = _clean(ai.chat(SYSTEM, user, max_tokens=12000, timeout=180,
+                        reasoning="medium"))  # runs once per call, in the background: worth the thought
+    return _check_times(md, call) or None
 
 
 def enhance_call(call_id):

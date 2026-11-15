@@ -4,7 +4,8 @@
 //   "- " / "* "  bullet list      "1. "  numbered list      "# " "## " "### "  headings
 //   Enter continues a list, Enter on an empty item leaves it, Tab / Shift+Tab nest
 //   Ctrl+B / Ctrl+I, or typing **bold** / *italic*
-// Supported Markdown subset: headings, nested bullet / numbered lists, paragraphs, **bold**, *italic*, `code`.
+// Supported Markdown subset: headings, nested bullet / numbered lists, paragraphs, **bold**, *italic*, `code`,
+// and [mm:ss] times, shown as links to that moment of the transcript (one piece: deleted whole, never edited inside).
 
 (function () {
   const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -14,7 +15,8 @@
     return esc(text)
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-      .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+      .replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>")
+      .replace(/\[(\d{1,3}:[0-5]\d)\](?!\()/g, '<a class="time" data-time="$1" contenteditable="false" title="See it in the transcript">$1</a>');
   }
 
   function mdToHtml(md) {
@@ -62,6 +64,7 @@
       else if (n.nodeType !== 1) continue;
       else if (/^(UL|OL)$/.test(n.tagName)) continue; // nested lists are handled by listToMd
       else if (n.tagName === "BR") s += "";
+      else if (n.dataset.time) s += `[${n.dataset.time}]`;
       else {
         const inner = inlineToMd(n);
         if (!inner.trim()) { s += inner; continue; }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.6 (2026-11-15)
+
+- Every decision and next step in the enhanced notes ends with the time it was said, like [12:34]: click it and the transcript opens at that line, highlighted for a moment, so you can check who agreed to what
+- Times in Ask answers are links too, and "Back to answer" brings you back from the transcript
+- In the files a time stays plain [12:34] text, readable in Obsidian or any editor
+- Fixed: on a long call the enhanced notes could fail with "the model ran out of tokens before answering" and never arrive. The model now has more room to think, and when it still runs out it is asked again with less thinking. Same for Ask
+
 ## 0.3.5 (2026-10-22)
 
 - Search your calls from the Ask bar: on the home page the list narrows as you type to the calls with every word you typed in their title, your notes, the enhanced notes or the transcript. Case and accents don't matter, and each result shows the words in context, in bold
