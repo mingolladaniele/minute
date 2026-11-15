@@ -182,7 +182,7 @@ class App:
 
     def auto_start(self, app):
         if self.recorder.start(auto=True, app=app):
-            self._notify(f"Taking notes on your {app} call. Hover the pill on the right to stop.")
+            self._notify(f"Taking notes on your {app} call. Hover the pill at the top of the screen to stop.")
 
     def stop(self, source="window"):
         """A stop from the user (window, pill, tray), as opposed to the call ending."""

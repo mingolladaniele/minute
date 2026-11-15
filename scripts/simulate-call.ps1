@@ -44,7 +44,7 @@ if (-not $mic) { throw "No microphone found" }
 
 Write-Host ""
 Write-Host "Simulated call for $Seconds s (microphone: $mic)."
-Write-Host "- minute should start on its own: notification + pill on the right edge of the screen."
+Write-Host "- minute should start on its own: notification + pill at the top of the screen."
 Write-Host "- Open minute from the tray, write a few notes, talk into your mic now and then."
 Write-Host "- When the call ends the pill turns amber; minute stops about 45 s later."
 Write-Host ""

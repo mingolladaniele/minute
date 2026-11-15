@@ -1,4 +1,4 @@
-"""Recording indicator: a small pill docked to the right edge of the screen.
+"""Recording indicator: a small pill floating at the top centre of the screen.
 
 A native Windows layered window (per-pixel alpha, antialiased edges), rendered
 with Pillow and owned by its own message-loop thread. Other threads drive it
@@ -18,8 +18,10 @@ gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
 # Logical size (scaled by the system DPI).
-WIDTH, HEIGHT = 30, 66
-EDGE_MARGIN = 10
+WIDTH, HEIGHT = 78, 30
+TOP_MARGIN = 8
+MARK_X = 61  # centre of the level bars and of the stop button
+STOP_R = 9
 PILL = (29, 29, 32, 240)
 BORDER = (255, 255, 255, 38)
 BARS = (91, 209, 110, 255)
@@ -99,10 +101,23 @@ def _scale():
         return 1.0
 
 
+def default_position(screen_w, w, scale):
+    """Top centre, floating a little under the top edge."""
+    return (screen_w - w) // 2, round(TOP_MARGIN * scale)
+
+
+def on_stop_button(x, y, w, h, scale):
+    """Whether a point in the pill (physical px) is inside the red stop button."""
+    r = STOP_R * scale
+    return (x - MARK_X * scale) ** 2 + (y - h / 2) ** 2 <= r * r
+
+
 class Indicator:
-    def __init__(self, on_click, on_stop):
+    def __init__(self, on_click, on_stop, position=None, on_moved=None):
         self.on_click = on_click
         self.on_stop = on_stop
+        self.on_moved = on_moved  # (x, y) once a drag ends
+        self.position = position
         self.level = 0.0
         self.ending = False
         self.hover = False
@@ -155,8 +170,10 @@ class Indicator:
         ex = WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
         self.hwnd = user32.CreateWindowExW(ex, "MinuteIndicator", "minute indicator", WS_POPUP,
                                            0, 0, self.w, self.h, None, None, hinst, None)
-        self.x = user32.GetSystemMetrics(SM_CXSCREEN) - self.w - round(EDGE_MARGIN * s)
-        self.y = (user32.GetSystemMetrics(SM_CYSCREEN) - self.h) // 2
+        if self.position:
+            self.x, self.y = self.position
+        else:
+            self.x, self.y = default_position(user32.GetSystemMetrics(SM_CXSCREEN), self.w, s)
         self._ready.set()
 
         msg = wt.MSG()
@@ -218,19 +235,25 @@ class Indicator:
             return 0
         if msg == WM_LBUTTONUP:
             user32.ReleaseCapture()
-            moved, self._drag = self._moved, None
-            if not moved:
-                y = ctypes.c_short(lparam >> 16 & 0xFFFF).value
-                (self.on_stop if y > self.h * 0.5 else self.on_click)()
+            self._drag = None
+            self._release(ctypes.c_short(lparam & 0xFFFF).value, ctypes.c_short(lparam >> 16 & 0xFFFF).value)
             return 0
         return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+
+    def _release(self, x, y):
+        """Button up at (x, y) in the pill: the end of a drag, or a click (only the red button stops)."""
+        if self._moved:
+            if self.on_moved:
+                self.on_moved(self.x, self.y)
+            return
+        (self.on_stop if on_stop_button(x, y, self.w, self.h, self.scale) else self.on_click)()
 
     def _image(self):
         W, H = self.w * SS, self.h * SS
         im = Image.new("RGBA", (W, H), (0, 0, 0, 0))
         d = ImageDraw.Draw(im)
-        d.rounded_rectangle((0, 0, W - 1, H - 1), radius=W // 2, fill=PILL, outline=BORDER, width=SS)
-        cx, cy = W // 2, round(H * 0.69)
+        d.rounded_rectangle((0, 0, W - 1, H - 1), radius=H // 2, fill=PILL, outline=BORDER, width=SS)
+        cx, cy = round(MARK_X * self.scale * SS), H // 2
         if self.hover:
             r = round(9 * self.scale * SS)
             d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=STOP_BG)
@@ -245,7 +268,7 @@ class Indicator:
                 d.rounded_rectangle((x, cy - h // 2, x + bw, cy + h // 2), radius=bw // 2,
                                     fill=ENDING if self.ending else BARS)
         im = im.resize((self.w, self.h), Image.LANCZOS)
-        im.alpha_composite(self.logo, ((self.w - self.logo.width) // 2, round(self.h * 0.14)))
+        im.alpha_composite(self.logo, (round(9 * self.scale), (self.h - self.logo.height) // 2))
         return im
 
     def _render(self):
