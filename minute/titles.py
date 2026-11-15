@@ -2,9 +2,11 @@
 from minute import ai, settings, storage
 
 MAX_TRANSCRIPT_CHARS = 12000
+MIN_TRANSCRIPT_WORDS = 25  # fewer: a few misheard words on a near-silent call, they must not pick the language
 SYSTEM = (
     "You name meeting notes. Read the user's notes (<notes>) and the call transcript (<transcript>), then reply with a short, specific "
     "title of 3 to 7 words that says what the call was about. Write it in the language the call was held in. "
+    "If the transcript is missing or very short, write the title in the language of the notes. "
     "No quotes, no trailing punctuation, no dates, no words like 'call' or 'meeting' unless they add meaning. "
     "Reply with the title only."
 )
@@ -20,6 +22,8 @@ def _clean(title):
 def generate(call):
     """Title for a loaded call (storage.load_call), or None when there is nothing to name."""
     transcript, notes = ai.transcript_text(call["blocks"], MAX_TRANSCRIPT_CHARS), call.get("notes", "").strip()
+    if len(transcript.split()) < MIN_TRANSCRIPT_WORDS:
+        transcript = ""
     if not transcript and not notes:
         return None
     reply = ai.chat(SYSTEM, ai.notes_and_transcript(notes, transcript), max_tokens=1500,
