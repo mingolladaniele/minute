@@ -49,10 +49,12 @@ Write-Host "- Open minute from the tray, write a few notes, talk into your mic n
 Write-Host "- When the call ends the pill turns amber; minute stops about 45 s later."
 Write-Host ""
 
-$call = Start-Process -PassThru -WindowStyle Hidden "$work\zoom.exe" -ArgumentList @(
+# Redirecting stderr makes Start-Process use CreateProcess: without it (ShellExecute) it hangs when this
+# script's own output is piped, e.g. run from an agent or a scheduled task.
+$call = Start-Process -PassThru -WindowStyle Hidden -RedirectStandardError "$work\zoom.log" "$work\zoom.exe" -ArgumentList @(
     "-hide_banner", "-loglevel", "error", "-f", "dshow", "-i", "audio=`"$mic`"", "-t", "$Seconds", "-f", "null", "-")
 Start-Sleep 4  # let minute see the call and start recording before the others speak
-$them = Start-Process -PassThru -WindowStyle Hidden $ffplay -ArgumentList @(
+$them = Start-Process -PassThru -WindowStyle Hidden -RedirectStandardError "$work\ffplay.log" $ffplay -ArgumentList @(
     "-nodisp", "-autoexit", "-loglevel", "quiet", "-t", "$($Seconds - 10)", "`"$Audio`"")
 
 $call.WaitForExit()

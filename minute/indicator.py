@@ -39,6 +39,7 @@ MA_NOACTIVATE, TME_LEAVE, ULW_ALPHA, AC_SRC_ALPHA = 3, 0x2, 0x2, 0x1
 SW_HIDE, SW_SHOWNOACTIVATE, SM_CXSCREEN, SM_CYSCREEN = 0, 4, 0, 1
 SWP_NOSIZE, SWP_NOZORDER, SWP_NOACTIVATE = 0x1, 0x4, 0x10
 IDC_HAND = 32649
+DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
 
 LRESULT = ctypes.c_ssize_t
 WNDPROC = ctypes.WINFUNCTYPE(LRESULT, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
@@ -160,6 +161,12 @@ class Indicator:
 
     # --- window thread --------------------------------------------------------
     def _loop(self):
+        # Per-monitor DPI aware for this thread only: otherwise, when the process isn't DPI aware, the screen size
+        # comes back scaled down while the layered window is placed in real pixels, and the pill lands off centre.
+        try:
+            user32.SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        except AttributeError:  # before Windows 10 1607
+            pass
         s = _scale()
         self.w, self.h = round(WIDTH * s), round(HEIGHT * s)
         self.scale = s
