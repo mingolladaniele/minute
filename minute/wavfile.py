@@ -4,8 +4,6 @@ import struct
 import time
 import wave
 
-import numpy as np
-
 HEADER_EVERY = 5.0  # seconds
 
 
@@ -25,6 +23,8 @@ class WavWriter:
                 + b"data" + struct.pack("<I", data))
 
     def write(self, pcm):
+        import numpy as np
+
         self._f.write((np.clip(pcm, -1, 1) * 32767).astype("<i2").tobytes())
         self.frames += len(pcm)
         if time.monotonic() - self._last_patch >= HEADER_EVERY:
@@ -58,6 +58,8 @@ def repair(path):
 
 def read(path):
     """float32 mono samples and the sample rate."""
+    import numpy as np
+
     with wave.open(str(path), "rb") as w:
         rate = w.getframerate()
         pcm = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(np.float32) / 32768

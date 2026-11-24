@@ -34,6 +34,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 Name: "startup"; Description: "Open minute at login (it waits in the tray)"
 Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 
+[InstallDelete]
+; The previous version's bundled libraries: an update must not leave unused ones behind (0.3.8 dropped .NET).
+Type: filesandordirs; Name: "{app}\_internal"
+
 [Files]
 Source: "..\dist\minute\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 

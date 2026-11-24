@@ -1,25 +1,14 @@
 """Desktop app: tray icon, main window (home, notes, settings) and a minimal recording indicator."""
-import ctypes
 import json
 import os
 import threading
 import time
 import webbrowser
 
-import pystray
-import webview
-from PIL import Image
-
 import minute
-from minute import ai, ask, capture, config, model, settings, storage, titles
-from minute.calls import CallWatcher
-from minute.indicator import Indicator
-from minute.recorder import Recorder
-from minute.worker import Worker
+from minute import ai, config, settings, storage
 
-MUTEX_NAME = "Local\\minute-single-instance"
 UNLOAD_AFTER = float(os.environ.get("MINUTE_UNLOAD_AFTER", 600))  # seconds without calls before the model is freed
-ERROR_ALREADY_EXISTS = 183
 
 
 class Api:
@@ -30,6 +19,7 @@ class Api:
 
     # calls
     def list_calls(self):
+        self._app.recovered.wait()
         return storage.list_calls()
 
     def get_call(self, call_id):
@@ -48,6 +38,7 @@ class Api:
         storage.save_enhanced(call_id, text, source="user")
 
     def regenerate_enhanced(self, call_id):
+        self._app.booted.wait()
         storage.update_meta(call_id, enhanced_status="pending", enhanced_error=None, enhanced_edited=False)
         self._app.worker.kick()
 
@@ -73,11 +64,13 @@ class Api:
         return True
 
     def retitle(self, call_id):
+        self._app.booted.wait()
         storage.update_meta(call_id, title_source="default", title_status="pending")
         self._app.worker.kick()
 
     def retry(self, call_id):
         """Redo whatever failed for this call (transcript from audio, AI title) now."""
+        self._app.booted.wait()
         meta = storage.read_meta(call_id)
         if meta.get("title_status") == "pending":
             storage.update_meta(call_id, title_error=None)
@@ -86,23 +79,31 @@ class Api:
     # recording
     def status(self):
         rec = self._app.recorder
+        if rec is None:  # still starting up, so certainly not recording: the page needn't wait for it
+            return {"state": "idle", "call_id": None, "auto": False, "engine": "unloaded", "engine_error": None,
+                    "model_ready": config.find_model() is not None or bool(self._app.args.model),
+                    "downloading": self._app.downloading}
         return {"state": rec.state, "call_id": rec.call_id, "auto": rec.auto,
                 "engine": rec.engine_state, "engine_error": rec.engine_error,
                 "model_ready": config.find_model() is not None or bool(self._app.args.model),
                 "downloading": self._app.downloading}
 
     def start(self):
+        self._app.booted.wait()
         self._app.start()
 
     def stop(self):
+        self._app.booted.wait()
         self._app.stop()
 
     def keep_recording(self):
         """Cancel the auto-stop countdown: from now on this note only stops when the user stops it."""
+        self._app.booted.wait()
         self._app.recorder.auto = False
         self._app.on_call_ending(None)
 
     def download_model(self):
+        self._app.booted.wait()
         self._app.download_model()
 
     # about
@@ -120,6 +121,8 @@ class Api:
 
     # settings
     def get_settings(self):
+        from minute import capture
+
         values = settings.load()
         values["ai_key"] = "•" * 8 if values["ai_key"] else ""  # never send the key back to the page
         values["pi_key_available"] = settings.pi_key_available()
@@ -135,16 +138,20 @@ class Api:
         if values.get("ai_key", "").startswith("•"):
             values.pop("ai_key")  # unchanged placeholder
         settings.save(values)
+        self._app.booted.wait()
         self._app.worker.kick()  # e.g. a new API key: pending titles can go now
         return self.get_settings()
 
     def choose_folder(self):
-        picked = self._app.main.create_file_dialog(webview.FileDialog.FOLDER,
-                                                   directory=str(settings.recordings_dir()))
-        return picked[0] if picked else None
+        from minute.window import pick_folder
+
+        return pick_folder(self._app.main.hwnd, settings.recordings_dir())
 
     def ask(self, question, history=None, call_id=None):
-        """Ask anything, about one call (call_id) or all of them. Runs on pywebview's worker thread."""
+        """Ask anything, about one call (call_id) or all of them. Runs on its own thread, like every call from the page."""
+        # pydantic and the prompts load on the first question, not at startup
+        from minute import ask
+
         try:
             return {"ok": True, "answer": ask.ask(question, [tuple(t) for t in history or []], call_id or None)}
         except ai.AIError as e:
@@ -153,6 +160,8 @@ class Api:
             return {"ok": False, "error": f"something went wrong: {e}"}
 
     def test_ai(self):
+        from minute import titles
+
         try:
             title = titles.generate({"blocks": [], "notes": "Weekly sync: agreed to ship the beta on Friday, "
                                                             "Marco owns the release notes."})
@@ -164,7 +173,9 @@ class Api:
 class App:
     def __init__(self, args):
         self.args = args
-        self.recorder = Recorder(args.engine_dir, self._on_event, model_path=args.model, language=args.lang)
+        self.booted = threading.Event()     # recorder, pill, tray and worker are up
+        self.recovered = threading.Event()  # calls cut short by a crash are back in the list
+        self.recorder = None
         self.api = Api(self)
         self.quitting = False
         self.downloading = False
@@ -238,6 +249,8 @@ class App:
                     last[0] = pct
                     self._emit({"type": "download", "done": done, "total": total})
 
+            from minute import model
+
             try:
                 model.download(progress)
                 self._emit({"type": "download_done"})
@@ -261,7 +274,6 @@ class App:
     # --- windows ---------------------------------------------------------
     def show_main(self):
         self.main.show()
-        self.main.restore()
 
     def _on_main_closing(self):
         if self.quitting:
@@ -271,6 +283,9 @@ class App:
 
     # --- tray ------------------------------------------------------------
     def _build_tray(self):
+        import pystray
+        from PIL import Image
+
         menu = pystray.Menu(
             pystray.MenuItem("Open minute", lambda: self.show_main(), default=True),
             pystray.MenuItem(lambda item: "Stop recording" if self.recorder.busy else "Start recording",
@@ -311,41 +326,43 @@ class App:
         self.indicator.close()
         self.main.destroy()
 
-    def run(self):
-        self.main = webview.create_window(
-            "minute", url=str(config.UI / "main.html"), js_api=self.api, hidden=self.args.tray,
-            width=880, height=760, min_size=(560, 480), background_color="#F7F6F1",
-        )
-        self.main.events.closing += self._on_main_closing
+    def _boot(self):
+        """Only the window and the call list load before the window shows: the recorder (numpy, audio,
+        speech engine), the pill, the tray and the background worker load here, alongside it."""
+        try:
+            storage.recover_interrupted()  # calls cut short by a crash or power loss
+        finally:
+            self.recovered.set()
+        try:
+            self._start_services()
+        finally:
+            self.booted.set()  # a failure surfaces in the calls that need these, the window keeps working
+
+    def _start_services(self):
+        from minute.calls import CallWatcher
+        from minute.indicator import Indicator
+        from minute.recorder import Recorder
+        from minute.worker import Worker
+
+        args = self.args
+        self.recorder = Recorder(args.engine_dir, self._on_event, model_path=args.model, language=args.lang)
         self.indicator = Indicator(on_click=self.show_main, on_stop=lambda: self.stop("pill"),
                                    position=settings.load()["pill_pos"],
                                    on_moved=lambda x, y: settings.save({"pill_pos": [x, y]}))
         self._build_tray()
-        storage.recover_interrupted()  # calls cut short by a crash or power loss
         threading.Thread(target=self._unload_when_idle, name="minute-unload", daemon=True).start()
         self.worker = Worker(self.recorder, self._emit)
         self.watcher = CallWatcher(self.recorder, start=self.auto_start, stop=self._auto_stop,
                                    enabled=lambda: settings.load()["auto_record"], ending=self.on_call_ending)
-        webview.start(icon=str(config.ICON_ICO))
 
+    def run(self):
+        from minute.window import Window
 
-def _focus_running_instance():
-    user32 = ctypes.windll.user32
-    hwnd = user32.FindWindowW(None, "minute")
-    if hwnd:
-        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-        user32.SetForegroundWindow(hwnd)
+        self.main = Window("minute", config.WINDOW_SIZE, (560, 480), config.dark_theme(), config.ICON_ICO,
+                           hidden=self.args.tray, on_closing=self._on_main_closing)
+        threading.Thread(target=self._boot, name="minute-boot", daemon=True).start()
+        self.main.run((config.UI / "main.html").as_uri(), self.api)
 
 
 def run(args):
-    # One minute per user: a second launch (e.g. Start menu while it sits in the tray) focuses the first.
-    mutex = ctypes.windll.kernel32.CreateMutexW(None, False, MUTEX_NAME)
-    if ctypes.windll.kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
-        _focus_running_instance()
-        return
-    # Own taskbar identity, so Windows shows minute's icon instead of Python's.
-    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("minute")
-    try:
-        App(args).run()
-    finally:
-        ctypes.windll.kernel32.CloseHandle(mutex)
+    App(args).run()

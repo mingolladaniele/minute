@@ -4,6 +4,7 @@ from pathlib import Path
 
 ROOT = Path(SPECPATH).parent
 ENGINE = "vendor/transcribe-native-windows-x86_64-cpu-vulkan"
+WEBVIEW = "vendor/webview"
 
 a = Analysis(
     [str(ROOT / "minute.pyw")],
@@ -14,8 +15,9 @@ a = Analysis(
         (str(ROOT / "assets" / "icon.ico"), "assets"),
         (str(ROOT / "CHANGELOG.md"), "."),
         (str(ROOT / ENGINE), ENGINE),
+        (str(ROOT / WEBVIEW), WEBVIEW),
     ],
-    hiddenimports=["webview.platforms.winforms", "webview.platforms.edgechromium", "clr", "pystray._win32"],
+    hiddenimports=["pystray._win32"],
     excludes=["tkinter"],
 )
 pyz = PYZ(a.pure)

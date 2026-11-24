@@ -1,6 +1,7 @@
 """Paths and command-line options, valid both from source and inside the PyInstaller build."""
 import os
 import sys
+import winreg
 from pathlib import Path
 
 FROZEN = getattr(sys, "frozen", False)
@@ -15,6 +16,7 @@ ICON_ICO = RESOURCES / "assets" / "icon.ico"
 CHANGELOG = RESOURCES / "CHANGELOG.md"
 DEFAULT_ENGINE = RESOURCES / "vendor" / "transcribe-native-windows-x86_64-cpu-vulkan"
 DEFAULT_RECORDINGS = Path.home() / "Documents" / "minute"
+WINDOW_SIZE = (880, 760)  # logical pixels
 
 MODEL_REPO = "handy-computer/nemotron-3.5-asr-streaming-0.6b-gguf"
 MODEL_FILE = "nemotron-3.5-asr-streaming-0.6b-Q8_0.gguf"
@@ -29,6 +31,20 @@ def find_model():
     snapshots = Path.home() / ".cache/huggingface/hub" / f"models--{MODEL_REPO.replace('/', '--')}" / "snapshots"
     found = sorted(snapshots.glob(f"*/{MODEL_FILE}"))
     return found[-1] if found else None
+
+
+def dark_theme():
+    """Windows apps set to dark, as the page (prefers-color-scheme) and pywebview's title bar read it."""
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize") as k:
+            return winreg.QueryValueEx(k, "AppsUseLightTheme")[0] == 0
+    except OSError:
+        return False
+
+
+def background(dark):
+    """The page's --bg, so the window shows no flash of the other theme while the page loads."""
+    return "#161618" if dark else "#F7F6F1"
 
 
 def add_arguments(ap):

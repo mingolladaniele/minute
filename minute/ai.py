@@ -5,8 +5,6 @@ import urllib.error
 import urllib.request
 from urllib.parse import urlparse
 
-from pydantic import ValidationError
-
 from minute import settings
 
 HTTP_REASONS = {
@@ -139,6 +137,9 @@ def chat_typed(system, user, schema, max_tokens=2000, timeout=60, retries=2, val
                reasoning="low"):
     """A reply validated against a pydantic model: JSON mode, then validation; when the reply doesn't fit,
     the model is shown its reply and the validation errors and asked again (up to `retries` times)."""
+    # only Ask needs pydantic: kept out of the startup imports
+    from pydantic import ValidationError
+
     system = (f"{system}\n\nReply with a single JSON object, nothing else, matching this JSON schema:\n"
               f"{json.dumps(schema.model_json_schema(), ensure_ascii=False)}")
     history, ask = [], user

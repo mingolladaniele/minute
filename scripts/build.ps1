@@ -30,6 +30,10 @@ Write-Host "building minute $version"
 if (-not (Test-Path "vendor\transcribe-native-windows-x86_64-cpu-vulkan\transcribe.dll")) {
     uv run python scripts/fetch_engine.py
 }
+if (-not (Test-Path "vendor\webview\webview.dll")) {
+    uv run python scripts/fetch_webview.py
+    if ($LASTEXITCODE) { throw "fetching the webview library failed" }
+}
 
 uv sync
 uv run pyinstaller packaging/minute.spec --noconfirm --clean --distpath dist --workpath build

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8 (2026-11-24)
+
+- minute opens faster: the window is on screen in under half a second instead of about two, and your calls show up in about 1.3 seconds instead of 2.2 (median of 20 launches each). The window now talks to the browser engine directly instead of through .NET, and the recorder, the pill and the tray load while your calls are already showing
+- Opening minute from the Start menu while it sits in the tray brings it up in about half a second instead of 1.1 to 1.4 seconds
+- In dark mode the window no longer flashes white while it opens
+
 ## 0.3.7 (2026-11-16)
 
 - The recording pill is now horizontal and floats at the top centre of the screen. Hover it to see the stop button: only the red button stops, a click anywhere else opens minute, and you can drag it where you like, it remembers the spot

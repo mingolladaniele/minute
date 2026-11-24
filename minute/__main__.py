@@ -5,9 +5,13 @@
     uv run python -m minute record [--seconds N] # headless capture in the terminal, Ctrl+C to stop
 """
 import argparse
+import ctypes
 import sys
 
 from minute import config
+
+MUTEX_NAME = "Local\\minute-single-instance"
+ERROR_ALREADY_EXISTS = 183
 
 
 def record(args):
@@ -44,6 +48,32 @@ def record(args):
     print(f"saved to {storage.call_dir(rec.call_id)}")
 
 
+def _focus_running_instance():
+    user32 = ctypes.windll.user32
+    hwnd = user32.FindWindowW(None, "minute")
+    if hwnd:
+        user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+
+
+def desktop(args):
+    # One minute per user: a second launch (e.g. Start menu while it sits in the tray) focuses the first,
+    # checked before any heavy import so that it takes a blink.
+    kernel32 = ctypes.windll.kernel32
+    mutex = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if kernel32.GetLastError() == ERROR_ALREADY_EXISTS:
+        _focus_running_instance()
+        return
+    # Own taskbar identity, so Windows shows minute's icon instead of Python's.
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("minute")
+    from minute.app import run
+
+    try:
+        run(args)
+    finally:
+        kernel32.CloseHandle(mutex)
+
+
 def main():
     if sys.stdout:  # None under pythonw / the windowed build
         sys.stdout.reconfigure(encoding="utf-8")
@@ -57,8 +87,7 @@ def main():
     if args.cmd == "record":
         record(args)
     else:
-        from minute.app import run
-        run(args)
+        desktop(args)
 
 
 if __name__ == "__main__":
