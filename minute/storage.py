@@ -242,8 +242,25 @@ def list_calls():
         except (OSError, json.JSONDecodeError):
             continue
         if m.get("status", "done") == "done" and "duration" in m:
+            m["preview"] = _preview(meta_file.parent)
             calls.append(m)
     return sorted(calls, key=lambda c: c["started"], reverse=True)
+
+
+def _preview(d, limit=160):
+    """The first line of text in the enhanced notes, else in your notes: the home list shows it under the title."""
+    for name in ("enhanced.md", "notes.md"):
+        try:
+            text = (d / name).read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            line = " ".join(_plain(line).split())
+            if len(line) > 2:
+                return line[:limit]
+    return ""
 
 
 def load_call(call_id):

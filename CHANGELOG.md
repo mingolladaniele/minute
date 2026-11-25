@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.9 (2026-11-25)
+
+- The home list shows all your calls at once: no more days to open one by one. Calls are grouped into Today, Yesterday, This week and then by month, and about six times as many fit on screen
+- Each call shows the first line of its notes under the title, and its date and length on the right
+- Press / anywhere outside a text field to jump to the search bar
+
 ## 0.3.8 (2026-11-24)
 
 - minute opens faster: the window is on screen in under half a second instead of about two, and your calls show up in about 1.3 seconds instead of 2.2 (median of 20 launches each). The window now talks to the browser engine directly instead of through .NET, and the recorder, the pill and the tray load while your calls are already showing
