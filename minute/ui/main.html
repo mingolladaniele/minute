@@ -59,23 +59,20 @@
   }
   .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; letter-spacing: -.01em; }
   .brand img { width: 26px; height: 26px; }
-  .navpill {
-    display: flex; align-items: center; height: 36px; padding: 0 4px;
-    border: 1px solid var(--line); border-radius: 999px; background: var(--chip);
-  }
-  .navpill button { height: 28px; padding: 0 12px 0 8px; display: flex; align-items: center; gap: 4px; border-radius: 999px; color: var(--muted); font-size: 13.5px; font-weight: 500; }
+  .navpill { display: flex; align-items: center; }
+  .navpill button { height: 30px; padding: 0 10px 0 6px; display: flex; align-items: center; gap: 4px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 500; }
   .navpill button:hover { background: var(--hover); color: var(--ink); }
   .right { display: flex; align-items: center; gap: 8px; }
   .btn-dark {
-    height: 36px; padding: 0 16px; border-radius: 999px;
-    background: var(--dark); color: var(--on-dark); font-weight: 600; font-size: 14px;
-    display: flex; align-items: center; gap: 8px;
+    height: 30px; padding: 0 13px 0 11px; border-radius: 999px;
+    background: var(--dark); color: var(--on-dark); font-weight: 500; font-size: 13px;
+    display: flex; align-items: center; gap: 7px;
     transition: transform .08s ease, opacity .15s;
   }
   .btn-dark:active { transform: scale(.97); }
   .btn-dark:disabled { opacity: .5; cursor: default; }
-  .btn-dark .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); }
-  .icon-btn { width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; color: var(--muted); }
+  .btn-dark .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rec); }
+  .icon-btn { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; color: var(--muted); }
   .icon-btn:hover { background: var(--hover); color: var(--ink); }
 
   .menu {

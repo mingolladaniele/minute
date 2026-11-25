@@ -5,6 +5,7 @@
 - The home list shows all your calls at once: no more days to open one by one. Calls are grouped into Today, Yesterday, This week and then by month, and about six times as many fit on screen
 - Each call shows the first line of its notes under the title, and its date and length on the right
 - Press / anywhere outside a text field to jump to the search bar
+- New note, Calls and the top bar icons are smaller and lighter, so the buttons no longer outweigh your calls
 
 ## 0.3.8 (2026-11-24)
 
