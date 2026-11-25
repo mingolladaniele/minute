@@ -151,7 +151,7 @@ def _lock_down(controller):
         iid = _guid("{FDB5AB74-AF33-4854-84F0-0A631DEB5EBA}")  # ICoreWebView2Settings3
         if not _com_call(settings, 0, ctypes.byref(iid), ctypes.byref(settings3),
                          argtypes=(ctypes.c_void_p, ctypes.c_void_p)):
-            _com_call(settings3, 22, 0, argtypes=(wt.BOOL,))  # put_AreBrowserAcceleratorKeysEnabled
+            _com_call(settings3, 24, 0, argtypes=(wt.BOOL,))  # put_AreBrowserAcceleratorKeysEnabled
     finally:
         for obj in (settings3, settings, core):
             _release(obj)

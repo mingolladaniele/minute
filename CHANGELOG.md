@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.12 (2026-11-25)
+
+- Browser shortcuts no longer act inside minute: Ctrl+F no longer opens a find bar, Ctrl+P no longer opens printing, and F5 or Ctrl+R no longer reload the page and lose what you were typing
+
 ## 0.3.11 (2026-11-25)
 
 - One bar at the top instead of two: the Windows title bar is gone, and minute's own bar now moves the window and holds minimize, maximize and close. Drag it to move, double-click it to maximize, and resize from any edge as before
