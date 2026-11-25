@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.10 (2026-11-25)
+
+- New note shows only on the home page, so a call and Settings have a cleaner top bar
+- Switches in Settings are black and white instead of green, in line with the rest of minute
+- Settings descriptions are one short line each, and What's new folds into a single row you can open
+- A call shows how long it lasted and the app it was on (Telegram, Zoom, Meet…) next to its date
+
 ## 0.3.9 (2026-11-25)
 
 - The home list shows all your calls at once: no more days to open one by one. Calls are grouped into Today, Yesterday, This week and then by month, and about six times as many fit on screen

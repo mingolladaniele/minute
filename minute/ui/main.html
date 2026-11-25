@@ -270,8 +270,8 @@
     content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
     background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s;
   }
-  .switch input:checked + i { background: var(--live); }
-  .switch input:checked + i::after { transform: translateX(16px); }
+  .switch input:checked + i { background: var(--dark); }
+  .switch input:checked + i::after { transform: translateX(16px); background: var(--on-dark); }
   .seg { display: flex; padding: 3px; gap: 2px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
   .seg button { padding: 4px 12px; border-radius: 999px; font-size: 13px; color: var(--muted); }
   .seg button.on { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .12); }
@@ -315,12 +315,15 @@
   .about-head .label b { font-size: 16px; }
   .link { color: var(--ink); text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; cursor: pointer; }
   .link:hover { text-decoration-color: var(--ink); }
-  .changes { padding: 14px 16px; font-size: 14px; }
+  .changes { padding: 14px 16px; font-size: 14px; border-top: 1px solid var(--line); }
   .changes b { font-weight: 600; }
   .changes ul { margin: 6px 0 0; padding-left: 20px; color: var(--muted); }
   .changes li { margin: 3px 0; }
   .changes details { margin-top: 12px; }
   .changes summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+  .changes > summary { color: var(--ink); font-size: 14.5px; }
+  .changes > summary b { font-weight: 500; }
+  .changes[open] > summary { margin-bottom: 8px; }
   .changes details > div { margin-top: 10px; }
   .changes details > div + div { margin-top: 14px; }
   .btns { display: flex; gap: 6px; }
@@ -516,7 +519,7 @@ function renderTopbar() {
   $("nav").classList.toggle("hidden", !inPage);
   $("gear").classList.toggle("hidden", inPage);
   $("more").classList.toggle("hidden", !(ui.view === "note" && ui.call));
-  $("primary").classList.toggle("hidden", ui.state !== "idle"); // while recording, stop lives in the bottom control
+  $("primary").classList.toggle("hidden", inPage || ui.state !== "idle"); // home only; while recording, stop lives in the bottom control
 }
 $("primary").addEventListener("click", () => {
   if (ui.state === "idle" && !ui.model.ready) {
@@ -712,7 +715,9 @@ async function refreshCall(id) {
 function renderChips() {
   if (ui.call) {
     const c = ui.call;
-    $("chips").innerHTML = `<span class="chip">${ICON_CAL}${day(c.started)} ${hhmm(c.started)}</span>`;
+    const app = c.app && !c.source ? `<span class="chip">${esc(c.app)}</span>` : "";  // source: imported, app names the importer
+    $("chips").innerHTML = `<span class="chip">${ICON_CAL}${day(c.started)} ${hhmm(c.started)}</span>
+      ${c.duration ? `<span class="chip">${callLength(c.duration)}</span>` : ""}${app}`;
   } else if (ui.live) {
     const off = ui.live.off, ending = ui.live.ending;
     $("chips").innerHTML = `<span class="chip">${ICON_CAL}Today ${hhmm(new Date().toISOString())}</span>
@@ -1107,11 +1112,10 @@ function aboutHtml() {
       <div class="setting"><div class="label"><b>Source code</b><span>${esc(about.repo.replace("https://", ""))}</span></div>
         <div class="btns"><button class="btn-line" data-url="${esc(about.repo)}">GitHub</button>
         <button class="btn-line" data-url="${esc(about.repo)}/releases">Releases</button></div></div>
-      ${latest ? `<div class="changes">
-        <div class="label"><b>What's new</b></div>
+      ${latest ? `<details class="changes"><summary><b>What's new in ${esc(about.version)}</b></summary>
         ${releaseHtml(latest)}
         ${older.length ? `<details><summary>Earlier versions</summary>${older.map(releaseHtml).join("")}</details>` : ""}
-      </div>` : ""}
+      </details>` : ""}
     </div>`;
 }
 
@@ -1174,23 +1178,23 @@ function renderSettings() {
     <h1>Settings</h1>
     <h2>General</h2>
     <div class="card">
-      <div class="setting"><div class="label"><b>Record calls automatically</b><span>Start a note when Meet, Zoom, Teams, Slack, WhatsApp or another call app turns on your mic, and stop when the call ends. Dictation apps never trigger it.</span></div>${toggle("auto_record", p.auto_record)}</div>
+      <div class="setting"><div class="label"><b>Record calls automatically</b><span>Start when a call app (Meet, Zoom, Teams, WhatsApp…) turns on your mic, stop when the call ends.</span></div>${toggle("auto_record", p.auto_record)}</div>
       <div class="setting"><div class="label"><b>Open at login</b><span>Start minute in the tray when you sign in to Windows.</span></div>${toggle("launch_at_startup", p.launch_at_startup)}</div>
-      <div class="setting"><div class="label"><b>Language</b><span>What your calls are spoken in. Detection handles calls in any language, and calls that switch language. Pick a fixed language only if every call is in it.</span></div>
+      <div class="setting"><div class="label"><b>Language</b><span>Detection handles any language, even mixed. Pick one only if every call is in it.</span></div>
         <select data-key="language">${languageOptions(p.languages || [], p.windows_language).map(([v, n]) => `<option value="${v}" ${v === p.language ? "selected" : ""}>${n}</option>`).join("")}</select></div>
     </div>
     <h2>Recordings</h2>
     <div class="card">
-      <div class="setting"><div class="label"><b>Microphone</b><span>What records your voice. Windows default follows the mic set in Windows; a mic you pick is used whenever it's connected.</span></div>
+      <div class="setting"><div class="label"><b>Microphone</b><span>What records your voice. A mic you pick is used whenever it's connected.</span></div>
         <select data-key="mic">${micOptions(p).map(([v, n]) => `<option value="${esc(v)}" ${v === p.mic ? "selected" : ""}>${esc(n)}</option>`).join("")}</select></div>
       <div class="setting"><div class="label"><b>Folder</b><span>${esc(p.recordings_dir)}</span></div><button class="btn-line" id="pick-folder">Change</button></div>
-      <div class="setting"><div class="label"><b>Keep audio</b><span>Save you.wav and them.wav next to the transcript (about 2 MB per minute).</span></div>${toggle("keep_audio", p.keep_audio)}</div>
+      <div class="setting"><div class="label"><b>Keep audio</b><span>Save the call audio next to the transcript, about 2 MB a minute.</span></div>${toggle("keep_audio", p.keep_audio)}</div>
     </div>
     <h2>AI</h2>
     <div class="card">
-      <div class="setting"><div class="label"><b>Name calls with AI</b><span>When a call ends, your notes and the transcript are sent to the model below to write a title. Calls you rename yourself are never touched.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
-      <div class="setting"><div class="label"><b>Enhanced notes</b><span>When a call ends, turn your notes and the transcript into structured notes: a summary, the topics, decisions and next steps. Your own notes stay untouched.</span></div>${toggle("ai_enhance", p.ai_enhance)}</div>
-      <div class="setting"><div class="label"><b>Your name</b><span>So the AI knows that YOU in the transcript is you, and that someone saying this name is talking to you.</span></div><input type="text" data-key="user_name" placeholder="e.g. Daniele" value="${esc(p.user_name || "")}"></div>
+      <div class="setting"><div class="label"><b>Name calls with AI</b><span>Your notes and transcript go to the AI below for a title. Titles you set stay.</span></div>${toggle("ai_titles", p.ai_titles)}</div>
+      <div class="setting"><div class="label"><b>Enhanced notes</b><span>A summary, topics, decisions and next steps after each call. Your notes stay as they are.</span></div>${toggle("ai_enhance", p.ai_enhance)}</div>
+      <div class="setting"><div class="label"><b>Your name</b><span>So the AI knows which speaker is you.</span></div><input type="text" data-key="user_name" placeholder="e.g. Daniele" value="${esc(p.user_name || "")}"></div>
       <div class="${p.ai_titles || p.ai_enhance ? "" : "dim"}">
         <div class="setting"><div class="label"><b>Provider</b><span>${providerHint(provider)}</span></div>
           <div class="seg" id="provider">${PROVIDERS.map(([v, n]) => `<button data-v="${v}" class="${v === provider ? "on" : ""}">${n}</button>`).join("")}</div></div>
