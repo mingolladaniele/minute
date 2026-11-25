@@ -142,6 +142,9 @@ class Api:
         self._app.worker.kick()  # e.g. a new API key: pending titles can go now
         return self.get_settings()
 
+    def window_control(self, action):
+        self._app.main.control(action)
+
     def choose_folder(self):
         from minute.window import pick_folder
 

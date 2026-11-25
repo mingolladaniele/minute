@@ -39,8 +39,11 @@ user32.MonitorFromWindow.restype = wt.HANDLE
 user32.GetMonitorInfoW.argtypes = (wt.HANDLE, ctypes.c_void_p)
 user32.SetWindowLongW.argtypes = (wt.HWND, ctypes.c_int, wt.LONG)
 user32.SetLayeredWindowAttributes.argtypes = (wt.HWND, wt.DWORD, ctypes.c_ubyte, wt.DWORD)
-for _name in ("ShowWindow", "SetFocus", "DestroyWindow", "IsIconic", "SetForegroundWindow", "UpdateWindow",
-              "GetClientRect", "GetDpiForWindow", "MonitorFromWindow"):
+user32.PostMessageW.argtypes = (wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
+user32.GetSystemMetricsForDpi.argtypes = (ctypes.c_int, wt.UINT)
+user32.ScreenToClient.argtypes = (wt.HWND, ctypes.c_void_p)
+for _name in ("ShowWindow", "SetFocus", "DestroyWindow", "IsIconic", "IsZoomed", "SetForegroundWindow",
+              "UpdateWindow", "GetClientRect", "GetDpiForWindow", "MonitorFromWindow"):
     _fn = getattr(user32, _name)
     _fn.argtypes = {"ShowWindow": (wt.HWND, ctypes.c_int), "GetClientRect": (wt.HWND, ctypes.c_void_p),
                     "MonitorFromWindow": (wt.HWND, wt.DWORD)}.get(_name, (wt.HWND,))
@@ -48,6 +51,12 @@ for _name in ("ShowWindow", "SetFocus", "DestroyWindow", "IsIconic", "SetForegro
 WS_OVERLAPPEDWINDOW = 0x00CF0000
 CW_USEDEFAULT = -0x80000000
 WM_DESTROY, WM_SIZE, WM_ACTIVATE, WM_SETFOCUS, WM_CLOSE, WM_GETMINMAXINFO, WM_DPICHANGED = 0x2, 0x5, 0x6, 0x7, 0x10, 0x24, 0x2E0
+WM_NCCALCSIZE, WM_NCHITTEST, WM_SYSCOMMAND = 0x83, 0x84, 0x112
+HTCLIENT, HTTOP, HTTOPLEFT, HTTOPRIGHT = 1, 12, 13, 14
+SC_MINIMIZE, SC_MAXIMIZE, SC_CLOSE, SC_RESTORE = 0xF020, 0xF030, 0xF060, 0xF120
+SM_CYFRAME, SM_CXPADDEDBORDER = 33, 92
+SWP_NOSIZE, SWP_NOMOVE, SWP_FRAMECHANGED = 0x1, 0x2, 0x20
+TOP_EDGE = 6  # px at 100%: the strip above the page that still resizes the window from the top
 SW_HIDE, SW_SHOW, SW_RESTORE = 0, 5, 9
 GWL_EXSTYLE, WS_EX_LAYERED, WS_EX_TOOLWINDOW, LWA_ALPHA = -20, 0x80000, 0x80, 0x2
 SWP_NOZORDER, SWP_NOACTIVATE = 0x4, 0x10
@@ -65,6 +74,7 @@ INIT_JS = """
 window.pywebview = {api: {}};
 for (const name of %s) window.pywebview.api[name] = (...args) => window.__minute_api(name, args);
 window.addEventListener("DOMContentLoaded", () => {
+  if (%s) document.documentElement.classList.add("frameless");
   const css = document.createElement("style");
   css.textContent = "body { user-select: none; cursor: default; }";
   document.head.appendChild(css);
@@ -147,6 +157,25 @@ def _lock_down(controller):
             _release(obj)
 
 
+def _enable_drag_regions(controller):
+    """CSS app-region: drag moves the window, as a title bar does (WebView2 runtime 123 or later).
+    ICoreWebView2Settings9.put_IsNonClientRegionSupportEnabled (38). True when the runtime has it."""
+    core, settings, settings9 = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
+    try:
+        if _com_call(controller, 25, ctypes.byref(core), argtypes=(ctypes.c_void_p,)) or not core:
+            return False
+        if _com_call(core, 3, ctypes.byref(settings), argtypes=(ctypes.c_void_p,)) or not settings:
+            return False
+        iid = _guid("{0528A73B-E92D-49F4-927A-E547DDDAA37D}")  # ICoreWebView2Settings9
+        if _com_call(settings, 0, ctypes.byref(iid), ctypes.byref(settings9),
+                     argtypes=(ctypes.c_void_p, ctypes.c_void_p)) or not settings9:
+            return False
+        return _com_call(settings9, 38, 1, argtypes=(wt.BOOL,)) == 0
+    finally:
+        for obj in (settings9, settings, core):
+            _release(obj)
+
+
 def pick_folder(owner, start=None):
     """The Windows folder picker (IFileOpenDialog with FOS_PICKFOLDERS); the chosen path, or None."""
     ole32.CoInitializeEx(None, 0x2)  # apartment threaded, as the dialog wants
@@ -181,6 +210,7 @@ class Window:
     def __init__(self, title, size, min_size, dark, icon, hidden=False, on_closing=lambda: True):
         self.on_closing = on_closing  # () -> bool: False keeps the window (minute hides to the tray)
         self.min_size = min_size
+        self.frameless = False  # the page draws the title bar: set once WebView2 can drag the window
         self._w = None
         self._widget = None
         self._controller = None
@@ -256,13 +286,20 @@ class Window:
                 _lock_down(controller)
             except OSError:
                 log.exception("could not apply the WebView2 settings")
+            try:
+                self.frameless = _enable_drag_regions(controller)
+            except OSError:
+                log.exception("could not enable drag regions: keeping the Windows title bar")
+            if self.frameless:  # recompute the frame without the caption (WM_NCCALCSIZE)
+                user32.SetWindowPos(self.hwnd, None, 0, 0, 0, 0,
+                                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)
         names = [n for n in dir(api) if not n.startswith("_") and callable(getattr(api, n))]
         on_call = BIND_FN(lambda seq, req, _arg: self._call(api, seq, req))
         on_dispatch = DISPATCH_FN(lambda _w, _arg: self._pump())
         self._on_dispatch = on_dispatch
         self._callbacks += [on_call, on_dispatch]
         lib.webview_bind(self._w, b"__minute_api", on_call, None)
-        lib.webview_init(self._w, (INIT_JS % json.dumps(names)).encode())
+        lib.webview_init(self._w, (INIT_JS % (json.dumps(names), json.dumps(self.frameless))).encode())
         lib.webview_navigate(self._w, url.encode())
         lib.webview_run(self._w)
         w, self._w = self._w, None
@@ -295,11 +332,16 @@ class Window:
             except Exception:
                 log.exception("window task failed")
 
+    def _top_edge(self):
+        """Without the caption, the top resize border is a strip of the window above the page."""
+        return round(TOP_EDGE * self._scale()) if self.frameless and not user32.IsZoomed(self.hwnd) else 0
+
     def _fit_widget(self):
         if self._widget:
             r = wt.RECT()
             user32.GetClientRect(self.hwnd, ctypes.byref(r))
-            user32.MoveWindow(self._widget, 0, 0, r.right, r.bottom, True)
+            top = self._top_edge()
+            user32.MoveWindow(self._widget, 0, top, r.right, r.bottom - top, True)
 
     # --- from any thread -----------------------------------------------------------
     def evaluate_js(self, script):
@@ -311,6 +353,12 @@ class Window:
 
     def hide(self):
         user32.ShowWindow(self.hwnd, SW_HIDE)
+
+    def control(self, action):
+        """The page's title bar buttons: "min", "max" (maximize or restore), "close" (as the X: on_closing decides)."""
+        command = {"min": SC_MINIMIZE, "close": SC_CLOSE,
+                   "max": SC_RESTORE if user32.IsZoomed(self.hwnd) else SC_MAXIMIZE}[action]
+        user32.PostMessageW(self.hwnd, WM_SYSCOMMAND, command, 0)
 
     def destroy(self):
         self._dispatch(lambda: user32.DestroyWindow(self.hwnd))
@@ -327,7 +375,32 @@ class Window:
             return 0
         if msg == WM_SIZE:
             self._fit_widget()
+            if self.frameless:
+                self.evaluate_js(f"document.documentElement.classList.toggle('maximized', {str(wparam == 2).lower()})")
             return 0
+        if msg == WM_NCCALCSIZE and wparam and self.frameless:
+            # Keep the side and bottom borders Windows computes; drop the caption. Maximized, the window
+            # overhangs the screen by its frame, so the top moves in by as much as the sides do.
+            r = ctypes.cast(lparam, ctypes.POINTER(wt.RECT)).contents
+            top = r.top
+            user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+            r.top = top
+            if user32.IsZoomed(hwnd):
+                dpi = user32.GetDpiForWindow(hwnd)
+                r.top += user32.GetSystemMetricsForDpi(SM_CYFRAME, dpi) + user32.GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi)
+            return 0
+        if msg == WM_NCHITTEST and self.frameless:
+            hit = user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+            if hit != HTCLIENT:
+                return hit
+            p = wt.POINT(ctypes.c_short(lparam & 0xFFFF).value, ctypes.c_short(lparam >> 16 & 0xFFFF).value)
+            user32.ScreenToClient(hwnd, ctypes.byref(p))
+            if p.y >= self._top_edge():
+                return hit
+            r = wt.RECT()
+            user32.GetClientRect(hwnd, ctypes.byref(r))
+            corner = round(16 * self._scale())
+            return HTTOPLEFT if p.x < corner else HTTOPRIGHT if p.x >= r.right - corner else HTTOP
         if msg in (WM_SETFOCUS, WM_ACTIVATE) and self._controller and (msg == WM_SETFOCUS or wparam & 0xFFFF):
             # Keyboard to the page: ICoreWebView2Controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
             _com_call(self._controller, 12, 0, argtypes=(ctypes.c_int,))

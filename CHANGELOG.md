@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.11 (2026-11-25)
+
+- One bar at the top instead of two: the Windows title bar is gone, and minute's own bar now moves the window and holds minimize, maximize and close. Drag it to move, double-click it to maximize, and resize from any edge as before
+- Known limit: hovering the maximize button no longer shows the Windows 11 snap layouts; Win+Z and dragging to the screen edges still snap
+
 ## 0.3.10 (2026-11-25)
 
 - New note shows only on the home page, so a call and Settings have a cleaner top bar
