@@ -87,7 +87,9 @@ class Pick(BaseModel):
 
 def _header(call):
     started = call.get("started", "").replace("T", " ")[:16]
-    return f"Title: {call.get('title') or 'Untitled'}\nWhen: {started}, {round(call.get('duration', 0) / 60)} min"
+    with_ = f"\nWith (THEM): {', '.join(call['them_names'])}" if call.get("them_names") else ""
+    return (f"Title: {call.get('title') or 'Untitled'}\nWhen: {started}, {round(call.get('duration', 0) / 60)} min"
+            f"{with_}")
 
 
 def _one_call(call_id, budget):
