@@ -63,6 +63,18 @@ class Api:
             os.startfile(wav)
         return True
 
+    def set_people(self, call_id, text):
+        """The names of the other people, typed on the note. The AI notes are written again with them,
+        unless the user edited those notes (then the menu's Regenerate does it)."""
+        from minute import speakers
+
+        meta = speakers.set_typed(call_id, text)
+        redo = (settings.load()["ai_enhance"] and not meta.get("enhanced_edited")
+                and meta.get("transcript", "done") == "done")
+        if redo:
+            self.regenerate_enhanced(call_id)
+        return {"names": meta["them_names"], "regenerating": bool(redo)}
+
     def retitle(self, call_id):
         self._app.booted.wait()
         storage.update_meta(call_id, title_source="default", title_status="pending")

@@ -14,6 +14,7 @@ meta.json status fields:
     transcript_error, title_status ("done" | "pending" | "off"), title_error
     title_source   "default" | "user" | "ai"     (AI titles never overwrite "user")
     enhanced_status ("done" | "pending"), enhanced_error, enhanced_edited
+    them_names     the other people, by name (see minute.speakers); them_single, them_source ("ai" | "user")
 """
 import ctypes
 import json

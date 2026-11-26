@@ -1,73 +1,129 @@
-"""Call detection: Windows records which apps are using the microphone right now.
+r"""Call detection: which apps are capturing from a microphone right now.
 
-HKCU\\...\\CapabilityAccessManager\\ConsentStore\\microphone keeps, per app, the last time it
-opened and closed the mic; LastUsedTimeStop == 0 means "in use now". Only known call apps
-count, so dictation tools (Handy, Wispr Flow...), recorders and minute itself never start a note.
+Every capture stream on Windows is an audio session on its device (what the volume mixer lists), with
+the process that owns it; an *active* session is one recording right now. Only known call apps count, so
+dictation tools (Handy, Wispr Flow...), recorders and minute itself never start a note.
+
+Windows used to also keep this in the registry (CapabilityAccessManager\ConsentStore, LastUsedTimeStop == 0
+meaning "in use"), but Windows 11 26H2 stopped writing it there: audio sessions work on every version.
 """
+import ctypes
 import math
+import os
 import threading
 import time
-import winreg
-
-CONSENT = r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\microphone"
+from ctypes import POINTER, byref, c_int, c_uint, c_void_p, wintypes
 
 CALL_EXES = {
     "chrome.exe": "Chrome", "msedge.exe": "Edge", "firefox.exe": "Firefox", "brave.exe": "Brave",
-    "arc.exe": "Arc", "opera.exe": "Opera", "vivaldi.exe": "Vivaldi",
+    "arc.exe": "Arc", "opera.exe": "Opera", "vivaldi.exe": "Vivaldi", "comet.exe": "Comet",
     "zoom.exe": "Zoom", "teams.exe": "Teams", "ms-teams.exe": "Teams", "slack.exe": "Slack",
     "discord.exe": "Discord", "skype.exe": "Skype", "webex.exe": "Webex", "ciscocollabhost.exe": "Webex",
-    "whatsapp.exe": "WhatsApp", "telegram.exe": "Telegram", "signal.exe": "Signal",
-}
-CALL_PACKAGES = {
-    "MSTeams_": "Teams", "MicrosoftTeams_": "Teams", "5319275A.WhatsAppDesktop_": "WhatsApp",
-    "Microsoft.SkypeApp_": "Skype", "TelegramMessengerLLP.TelegramDesktop_": "Telegram",
-    "Zoom.ZoomRooms_": "Zoom",
+    "whatsapp.exe": "WhatsApp", "whatsapp.root.exe": "WhatsApp", "telegram.exe": "Telegram",
+    "signal.exe": "Signal",
 }
 
 
-def _in_use(key):
+class GUID(ctypes.Structure):
+    _fields_ = [("Data1", wintypes.DWORD), ("Data2", wintypes.WORD), ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8)]
+
+    def __init__(self, text):
+        super().__init__()
+        ctypes.oledll.ole32.CLSIDFromString(f"{{{text}}}", byref(self))
+
+
+CLSID_MMDeviceEnumerator = GUID("BCDE0395-E52F-467C-8E3D-C4579291692E")
+IID_IMMDeviceEnumerator = GUID("A95664D2-9614-4F35-A746-DE8DB63617E6")
+IID_IAudioSessionManager2 = GUID("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F")
+IID_IAudioSessionControl2 = GUID("BFB7FF88-7239-4FC9-8FA2-07C950BE9C6D")
+E_CAPTURE, DEVICE_STATE_ACTIVE, CLSCTX_ALL, SESSION_ACTIVE = 1, 1, 0x17, 1
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+
+
+def _call(obj, index, *args):
+    """Method `index` of the COM object's vtable (0-2 are IUnknown's)."""
+    vtable = ctypes.cast(obj, POINTER(POINTER(c_void_p))).contents
+    types = [c_void_p if type(a).__name__ == "CArgObject" else type(a) for a in args]  # byref() = a pointer
+    fn = ctypes.WINFUNCTYPE(ctypes.HRESULT, c_void_p, *types)(vtable[index])
+    return fn(obj, *args)
+
+
+def _release(obj):
+    if obj:
+        vtable = ctypes.cast(obj, POINTER(POINTER(c_void_p))).contents
+        ctypes.WINFUNCTYPE(c_uint, c_void_p)(vtable[2])(obj)
+
+
+def _exe_name(pid):
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return ""
     try:
-        start = winreg.QueryValueEx(key, "LastUsedTimeStart")[0]
-        stop = winreg.QueryValueEx(key, "LastUsedTimeStop")[0]
-    except FileNotFoundError:
-        return False
-    return start > 0 and stop == 0
+        buf = ctypes.create_unicode_buffer(1024)
+        size = wintypes.DWORD(len(buf))
+        if not kernel32.QueryFullProcessImageNameW(handle, 0, buf, byref(size)):
+            return ""
+        return os.path.basename(buf.value).lower()
+    finally:
+        kernel32.CloseHandle(handle)
 
 
-def _subkeys(key):
-    i = 0
-    while True:
-        try:
-            yield winreg.EnumKey(key, i)
-        except OSError:
-            return
-        i += 1
+def capturing_pids():
+    """Process IDs with an active capture session on any connected microphone. The calling thread must
+    have COM initialised (CallWatcher's thread does)."""
+    pids = set()
+    enum = c_void_p()
+    ctypes.oledll.ole32.CoCreateInstance(byref(CLSID_MMDeviceEnumerator), None, CLSCTX_ALL,
+                                         byref(IID_IMMDeviceEnumerator), byref(enum))
+    devices = c_void_p()
+    try:
+        _call(enum, 3, c_int(E_CAPTURE), wintypes.DWORD(DEVICE_STATE_ACTIVE), byref(devices))
+        count = c_uint()
+        _call(devices, 3, byref(count))
+        for i in range(count.value):
+            device, manager, sessions = c_void_p(), c_void_p(), c_void_p()
+            try:
+                _call(devices, 4, c_uint(i), byref(device))
+                _call(device, 3, byref(IID_IAudioSessionManager2), wintypes.DWORD(CLSCTX_ALL), c_void_p(),
+                      byref(manager))
+                _call(manager, 5, byref(sessions))
+                n = c_int()
+                _call(sessions, 3, byref(n))
+                for j in range(n.value):
+                    control, control2 = c_void_p(), c_void_p()
+                    try:
+                        _call(sessions, 4, c_int(j), byref(control))
+                        state = c_int()
+                        _call(control, 3, byref(state))
+                        if state.value != SESSION_ACTIVE:
+                            continue
+                        _call(control, 0, byref(IID_IAudioSessionControl2), byref(control2))
+                        pid = wintypes.DWORD()
+                        _call(control2, 14, byref(pid))
+                        if pid.value:
+                            pids.add(pid.value)
+                    except OSError:
+                        continue  # a session that went away meanwhile
+                    finally:
+                        _release(control2)
+                        _release(control)
+            except OSError:
+                continue  # a device unplugged meanwhile
+            finally:
+                _release(sessions)
+                _release(manager)
+                _release(device)
+    finally:
+        _release(devices)
+        _release(enum)
+    return pids
 
 
 def active_call_apps():
-    """Names of call apps holding the microphone right now, e.g. {"Chrome"}."""
-    found = set()
-    try:
-        root = winreg.OpenKey(winreg.HKEY_CURRENT_USER, CONSENT)
-    except FileNotFoundError:
-        return found
-    with root:
-        for name in _subkeys(root):
-            if name == "NonPackaged":
-                with winreg.OpenKey(root, name) as np_key:
-                    for path in _subkeys(np_key):
-                        app = CALL_EXES.get(path.rsplit("#", 1)[-1].lower())
-                        if app:
-                            with winreg.OpenKey(np_key, path) as k:
-                                if _in_use(k):
-                                    found.add(app)
-            else:
-                app = next((a for prefix, a in CALL_PACKAGES.items() if name.startswith(prefix)), None)
-                if app:
-                    with winreg.OpenKey(root, name) as k:
-                        if _in_use(k):
-                            found.add(app)
-    return found
+    """Names of call apps recording from a microphone right now, e.g. {"Chrome"}."""
+    return {app for app in (CALL_EXES.get(_exe_name(pid)) for pid in capturing_pids()) if app}
 
 
 class CallWatcher:
@@ -94,6 +150,7 @@ class CallWatcher:
             self._suppressed = True
 
     def _loop(self):
+        ctypes.windll.ole32.CoInitializeEx(None, 0)  # COINIT_MULTITHREADED, for the audio session queries
         while True:
             try:
                 self._tick()

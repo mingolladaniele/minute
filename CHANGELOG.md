@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.13 (2026-11-26)
+
+- Calls are recorded automatically again. Recent Windows 11 versions (26H2) stopped writing which apps use the microphone where minute looked, so no call was ever detected. minute now asks Windows' audio system directly which apps are recording from a microphone, which works on every version: a note starts about 3 seconds after Meet, Zoom, Teams or WhatsApp turns on the mic
+- Notes name the people you talked to. When the call reveals a name (someone introduces themselves, you greet them by name), the note shows "With Sara" and the enhanced notes use the name, also as the owner of what that person took on. People only mentioned in the call, and you, are never listed, and a name the call doesn't contain is never kept
+- When no name comes out, click "Who was on the call?" on the note and type it: the enhanced notes are written again with it. Ask knows the names too
+
 ## 0.3.12 (2026-11-25)
 
 - Browser shortcuts no longer act inside minute: Ctrl+F no longer opens a find bar, Ctrl+P no longer opens printing, and F5 or Ctrl+R no longer reload the page and lose what you were typing

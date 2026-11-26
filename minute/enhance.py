@@ -6,7 +6,7 @@ user emphasised, avoid boilerplate sections, keep technical terms as they are.
 """
 import re
 
-from minute import ai, settings, storage
+from minute import ai, settings, speakers, storage
 
 MAX_TRANSCRIPT_CHARS = 200_000  # roughly a 3-hour call; the model's context is far larger
 SHORT_TRANSCRIPT_CHARS = 1500  # about a minute or two of talk: a line of notes, not a structure
@@ -18,8 +18,9 @@ transcript (<transcript>).
 
 About the inputs:
 - Speakers: YOU is the user (their microphone). THEM is everyone else on the call (one or more \
-people, from the computer's audio). When the transcript makes names clear, use the names. When the user's \
-name is given, someone saying it is talking to YOU. In the notes the user is always "you" (in the output \
+people, from the computer's audio). When the other people's names are given, or the transcript makes \
+them clear, use the names; never a name that is in neither. When the user's name is given, someone saying it \
+is talking to YOU. In the notes the user is always "you" (in the output \
 language), never their name, even where others say it. Never write the labels YOU or THEM: write "you", the \
 names, or "they".
 - Both inputs contain mistakes: typos in the notes, misheard words in the transcript (a product or \
@@ -47,7 +48,7 @@ write that nothing was decided.
 - If decisions were made, a decisions section. If someone took work on, end with a next steps section of \
 "- **Owner**: task (by when) [mm:ss]", the task as an instruction ("Send the quote"). Only work somebody \
 accepted, only owners and dates that were said: the owner is "you" or a person named in the call, never THEM \
-and never guessed from who spoke; with no named owner, write "- task (by when) [mm:ss]". Relative dates \
+and never guessed from who spoke (when THEM is said to be one named person, a THEM line is theirs); with no named owner, write "- task (by when) [mm:ss]". Relative dates \
 ("Friday", "tomorrow") count from the day of the call. Every heading and word you write, these included, is \
 in that same output language.
 - End every decision and every next step with one time: the [mm:ss] of the transcript line where it was \
@@ -103,6 +104,8 @@ def generate(call):
               f"{round(call.get('duration', 0) / 60)} min")]
     if name := ai.user_name():
         about.append(f"The user (YOU) is {name}.")
+    if them := speakers.describe(call):
+        about.append(them)
     if len(transcript) < SHORT_TRANSCRIPT_CHARS and len(notes) < SHORT_NOTES_CHARS:
         about.append("This call is short: write one to three sentences or a few bullets, with no ### sections, "
                      "only what was said: nothing about what wasn't decided, planned or specified.")
@@ -116,6 +119,7 @@ def enhance_call(call_id):
     """Write enhanced.md for a finished call. Returns the Markdown, or None when there was nothing to write."""
     if not settings.load()["ai_enhance"]:
         return None
+    speakers.ensure(call_id)  # names first, so the notes can use them
     md = generate(storage.load_call(call_id))
     if md:
         storage.save_enhanced(call_id, md, source="ai")
